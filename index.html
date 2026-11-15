@@ -4479,7 +4479,6 @@ animation:sweep .72s cubic-bezier(.3,.6,.3,1) 1;
 }
 @media (prefers-reduced-motion: reduce){
 html body .colophon .chip .swp::after,
-html body .pager button .swp::after{animation:none!important;opacity:0!important}
 }
 html body .colophon #statusTags,
 html body .colophon .pager,
@@ -4509,7 +4508,6 @@ max-width:min(60vw,560px);z-index:41;
 }
 html body .dock-rail,
 html body .dock-panel,
-html body .dock-glow{display:none !important}
 html body #statusTags .chip::after{content:none;display:none}
 html body .colophon{
 position:fixed;left:0;right:0;top:0;bottom:auto;
@@ -4731,6 +4729,7 @@ html body #chapStage[data-mode="scatter"] .chap-item.is-on .nd{animation:none}
 html body #chapStage[data-mode="scatter"] .chap-item:has(.txt:hover) .ld::after{display:none}
 }
 </style>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
 <body class="prologue-active cover-intro">
 <div id="bootGate" aria-live="polite">
@@ -5200,17 +5199,17 @@ html body #chapStage[data-mode="scatter"] .chap-item:has(.txt:hover) .ld::after{
   </div>
 </div>
 
-<script defer src="js/three.bundle.js"></script>
+<script defer src="js/three.bundle.js?v=472733e4"></script>
 <script src="mc-bridge.js"></script>
-<script defer src="js/scene3d.js"></script>
-<script defer src="js/reality-shots.js"></script>
-<script defer src="js/lab-data.js"></script>
-<script defer src="js/app.js"></script>
+<script defer src="js/scene3d.js?v=fe01bd43"></script>
+<script defer src="js/reality-shots.js?v=6793a80a"></script>
+<script defer src="js/lab-data.js?v=729600bc"></script>
+<script defer src="js/app.js?v=34e514e8"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>
-<script defer src="js/rose.js"></script>
-<script defer src="js/particles-data.js"></script>
-<script defer src="js/particles3d.js"></script>
+<script defer src="js/rose.js?v=bccb1a51"></script>
+<script defer src="js/particles-data.js?v=63e811bd"></script>
+<script defer src="js/particles3d.js?v=b4d68a5c"></script>
 </body>
 </html>
