@@ -13,10 +13,22 @@
 var LOWFX = (typeof location !== 'undefined' && /[?&]fx=low/.test(location.search));
   'use strict';
 
+  /* 自适应画质：机器跑得动就保留颗粒/柔化，跑不动就自动降一档（有迟滞，不来回跳） */
+  var FX = { low: LOWFX, ema: 16, slowFor: 0, fastFor: 0 };
+  function fxOff() { return FX.low; }
+  function noteFrameMs(ms) {
+    FX.ema = FX.ema * 0.9 + ms * 0.1;
+    if (FX.ema > 30) { FX.slowFor += ms / 1000; FX.fastFor = 0; }
+    else if (FX.ema < 19) { FX.fastFor += ms / 1000; FX.slowFor = 0; }
+    if (!FX.low && FX.slowFor > 2.5) { FX.low = true; FX.slowFor = 0; }
+    else if (FX.low && !LOWFX && FX.fastFor > 6) { FX.low = false; FX.fastFor = 0; }
+  }
+
   var CV = document.getElementById('acts-canvas');
   var ctx = CV.getContext('2d');
   var WIDTH = 1600, HEIGHT = 900;
-  var DPR = Math.min(2, window.devicePixelRatio || 1);
+  /* 2 倍屏上按 2 画等于四个像素画一个点：这张是绘画感的内容，1.5 已经看不出来，省一半算力 */
+  var DPR = Math.min(1.5, window.devicePixelRatio || 1);
 
   /* Blender 蛋糕贴图（tools/bake-cake.mjs 烘出来的透明 PNG） */
   var CAKE = { img: null, ready: false, canvas: null };
@@ -124,6 +136,32 @@ var LOWFX = (typeof location !== 'undefined' && /[?&]fx=low/.test(location.searc
     }
     if (line) lines.push(line);
     return lines;
+  }
+  /* 折行只做一次：把整段话按最终折行结果切好、记住每行对应的原文区间。
+     这样打字机逐字显示时，后面的字不会因为"前缀变长"而突然跳行。 */
+  var _wrapCache = { key: '', lines: null };
+  function wrapIndexed(c, text, maxW, font) {
+    c.font = font;
+    var lines = [], line = '', start = 0;
+    var noHead = '，。！？、；：）】」』”’…—';
+    for (var i = 0; i < text.length; i++) {
+      var ch = text[i];
+      if (ch === '\n') { lines.push({ t: line, s: start, e: i }); line = ''; start = i + 1; continue; }
+      var t = line + ch;
+      if (c.measureText(t).width > maxW && line) {
+        if (noHead.indexOf(ch) >= 0) { lines.push({ t: t, s: start, e: i + 1 }); line = ''; start = i + 1; }
+        else { lines.push({ t: line, s: start, e: i }); line = ch; start = i; }
+      } else line = t;
+    }
+    if (line) lines.push({ t: line, s: start, e: text.length });
+    return lines;
+  }
+  function wrapCached(c, text, maxW, font) {
+    var key = font + '\u0001' + maxW + '\u0001' + text;
+    if (_wrapCache.key === key) return _wrapCache.lines;
+    _wrapCache.key = key;
+    _wrapCache.lines = wrapIndexed(c, text, maxW, font);
+    return _wrapCache.lines;
   }
   function blendPose(cur, tgt, k) {
     ['lean', 'sit', 'tilt', 'x'].forEach(function (f) {
@@ -809,12 +847,67 @@ function drawFigure(which, pale, alpha, pose) {
     ctx.globalAlpha = alpha;
   }
 
+  /* 柔边/灰调都是"同一张静态剪影 + 一次滤镜"的结果，逐帧重建很贵；
+     按（图源, 尺寸, DPR）烘一次存下来，之后只是普通的 drawImage。 */
+  var _bakeCache = {};
+  var _bakeOrder = [];
+  var _bakeSeq = 0;
+  function bakeLayer(src, w, h, mode) {
+    if (!src.__bk) { try { src.__bk = ++_bakeSeq; } catch (e) { return null; } }
+    var bw = Math.max(1, Math.round(w + (mode === 'halo' ? 4 : 0)));
+    var bh = Math.max(1, Math.round(h + (mode === 'halo' ? 4 : 0)));
+    var key = src.__bk + '|' + bw + 'x' + bh + '|' + mode + '|' + (DPR || 1);
+    var hit = _bakeCache[key];
+    if (hit) return hit;
+    try {
+      var cv = document.createElement('canvas');
+      cv.width = bw; cv.height = bh;
+      var c2 = cv.getContext('2d');
+      c2.filter = mode === 'halo'
+        ? 'blur(' + (2.2 * (DPR || 1)).toFixed(2) + 'px)'
+        : 'invert(1) brightness(.34) sepia(.5)';
+      c2.drawImage(src, mode === 'halo' ? 2 : 0, mode === 'halo' ? 2 : 0, w, h);
+      _bakeCache[key] = cv;
+      _bakeOrder.push(key);
+      while (_bakeOrder.length > 16) { delete _bakeCache[_bakeOrder.shift()]; }
+      return cv;
+    } catch (e) { return null; }
+  }
+
+  /* 影子的两层"投在墙上"的痕迹（都在同一处坐标上画，不做位移，所以不会重影）：
+     ① 柔边：同一张剪影放大两像素、虚化后垫在底下，边缘不再是刀切的；
+     ② 灰调：剪影本身不是纯黑，反相压暗后叠一点点灰，让它像被墙吸住的一块暗部。 */
+  function blitHalo(x0, y0) {
+    if (pale || diss > 0.001) return;
+    var baked = bakeLayer(src, w, h, 'halo');
+    if (!baked) return;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.30;
+    ctx.drawImage(baked, x0 - 2, y0 - 2, w + 4, h + 4);
+    ctx.restore();
+    ctx.globalAlpha = alpha;
+  }
+  function blitGrey(x0, y0) {
+    if (pale || diss > 0.001) return;
+    var baked = bakeLayer(src, w, h, 'grey');
+    if (!baked) return;
+    ctx.save();
+    ctx.globalAlpha = alpha * 0.16;
+    ctx.drawImage(baked, x0, y0, w, h);
+    ctx.restore();
+    ctx.globalAlpha = alpha;
+  }
+
   if (cfg.flip) {
     ctx.translate(cfg.x + w / 2, cfg.y + figDY);
     ctx.scale(-1, 1);
+    blitHalo(-w / 2, 0);
     blitFig(-w / 2, 0);
+    blitGrey(-w / 2, 0);
   } else {
+    blitHalo(cfg.x, cfg.y + figDY);
     blitFig(cfg.x, cfg.y + figDY);
+    blitGrey(cfg.x, cfg.y + figDY);
   }
   ctx.restore();
 }
@@ -1449,7 +1542,7 @@ function person(p, opts, alpha) {
       gg.addColorStop(1, '#080504');
       g2.fillStyle = gg;
       g2.fillRect(0, 0, WIDTH, HEIGHT);
-      if (!LOWFX && TEX.walltex && (TEX.walltex.naturalWidth || TEX.walltex.width)) {
+      if (!fxOff() && TEX.walltex && (TEX.walltex.naturalWidth || TEX.walltex.width)) {
         g2.save();
         g2.globalCompositeOperation = 'overlay';
         g2.globalAlpha = 0.38;
@@ -1948,7 +2041,7 @@ function person(p, opts, alpha) {
     grainTile = c;
   }
   function drawGrain(t, amt) {
-    if (LOWFX) return;
+    if (fxOff()) return;
     if (!grainTile || amt <= 0) return;
     ctx.save();
     /* 细颗粒：快、密 */
@@ -2299,6 +2392,8 @@ function person(p, opts, alpha) {
     cam: { x: 0, y: 70, z: 1.55 }, camT: { x: 0, y: 70, z: 1.55 },
     scene: 'shadow',
     autoLeft: 0,
+    autoOn: false,
+    idle: 0,
     ended: false
   };
 
@@ -2320,8 +2415,6 @@ function person(p, opts, alpha) {
 
     /* 正文（点开词条后，屏幕上这句换成了那一段） */
     var body = G.chipLine || G.text;
-    var shown = body.slice(0, Math.floor(G.typed));
-    if (G.chipLine) shown = body;
     var size = 26, lh = 47, measure = 1080;
     var font = size + 'px ' + FONT;
     ctx.font = font;
@@ -2331,10 +2424,18 @@ function person(p, opts, alpha) {
     ctx.shadowBlur = 16;
     var chipFadeA = 1;
     if (G.chipLine && G.chipAt) chipFadeA = Math.max(0, Math.min(1, (performance.now() / 1000 - G.chipAt) / 0.22));
-    var lines = wrapText(ctx, shown, measure, font);
+    /* 整段话的折行一次算好、缓存；逐字显示只是按行切前缀，行首行尾不会再变 */
+    var fullLines = wrapCached(ctx, body, measure, font);
+    var typedN = G.chipLine ? body.length : Math.floor(G.typed);
+    var lines = [];
+    for (var li = 0; li < fullLines.length; li++) {
+      var L = fullLines[li];
+      if (typedN >= L.e) lines.push(L.t);
+      else if (typedN > L.s) { lines.push(L.t.slice(0, typedN - L.s)); break; }
+      else break;
+    }
     /* 用整段话的行数算位置，而不是当前已打出的行数，否则每多一行整块就往上窜 */
-    var fullLines = wrapText(ctx, body, measure, font).length;
-    var baseY = HEIGHT - 96 - (Math.max(fullLines, 1) - 1) * lh;
+    var baseY = HEIGHT - 96 - (Math.max(fullLines.length, 1) - 1) * lh;
     ctx.globalAlpha = 0.93 * chipFadeA;
     for (var i = 0; i < lines.length; i++) ctx.fillText(lines[i], margin + 26, baseY + i * lh);
     ctx.globalAlpha = 1;
@@ -2463,18 +2564,7 @@ function person(p, opts, alpha) {
     }
   }
 
-  /* 构建标记：右上角一行小字，用来确认浏览器没吃到旧缓存 */
-  (function () {
-    try {
-      if ((location.search.match(/[?&]hud=0/) || []).length) return;  /* 录屏时隐藏 */
-      var sc = document.querySelector('script[src*="acts.js"]');
-      var v = (sc && /v=(\d+)/.exec(sc.getAttribute('src') || '')) ? RegExp.$1 : 'dev';
-      var d = document.createElement('div');
-      d.style.cssText = 'position:fixed;left:14px;top:34px;z-index:998;color:rgba(232,214,186,.55);font:11px/1.4 ui-monospace,Consolas,monospace;letter-spacing:1px;pointer-events:none';
-      d.textContent = 'build ' + v;
-      document.body.appendChild(d);
-    } catch (e) {}
-  })();
+  /* 构建标记已撤掉：这是定稿的正片，画面上不再挂 build 号（排障时可临时加回） */
 
   /* ---------------------------------------------------------- 每帧 */
   var last = 0;
@@ -2588,7 +2678,11 @@ function person(p, opts, alpha) {
 
   function frame(now) {
     requestAnimationFrame(frame);
+    /* dtReal：真实经过时间（打字机用，掉帧时字速不变；上限 0.12 免得卡一下蹦出一整行）
+       dt：动画用，卡到 0.05 以内，避免镜头/形变跳得太猛 */
+    var dtReal = Math.min(0.12, (now - last) / 1000 || 0.016);
     var dt = Math.min(0.05, (now - last) / 1000 || 0.016);
+    noteFrameMs(Math.max(1, Math.min(400, (now - last) || 16)));
     last = now;
     W.t += dt;
     G.bt += dt;
@@ -2607,7 +2701,7 @@ function person(p, opts, alpha) {
     } else W.trail.length = 0;
 
     if (G.typing) {
-      G.typed = Math.min(G.text.length, G.typed + dt * 34);
+      G.typed = Math.min(G.text.length, G.typed + dtReal * 26);
       if (G.typed >= G.text.length) { G.typing = false; G.doneAt = t; onTyped(); }
     }
     if (!(G.beat && G.beat.id === 'flash')) G.flash = Math.max(0, G.flash - dt * 1.15);
@@ -2616,18 +2710,18 @@ function person(p, opts, alpha) {
     G.black = Math.max(0, G.black - dt * 0.9);
 
     if (G.beat && G.beat.update) G.beat.update(G.bt, dt);
-    if (G.beat && G.beat.auto && G.bt > G.beat.auto && !G.paused) { G.beat.auto = 0; advance(); }
-    /* 无需交互的拍自动往下走，不再逼人点 */
-    if (G.beat && !G.typing && !G.ended && G.beat.id !== 'dream' && G.beat.id !== 'epilogue') {
-      var bb = G.beat, blocked = false;
-      if (bb.chips && bb.chips.length) blocked = !bb.chips.every(function (x) { return G.chipsRead[x.key]; });
-      if (bb.hotspot && G.hotspot) blocked = true;
-      if (!blocked && !bb.auto && !G.paused) {
-        G.idle = (G.idle || 0) + dt;
-        var need = 1.7 + G.text.length / 13;
-        if (G.idle > need) { G.idle = 0; advance(); }
+    /* 自动播放：默认关；开了才往下走，节奏比原来那套 idle 慢一档（默读约 9 字/秒 + 换气） */
+    if (G.autoOn && !G.paused && G.beat && !G.ended) {
+      var bbA = G.beat, blockedA = false;
+      if (bbA.chips && bbA.chips.length) blockedA = !bbA.chips.every(function (x) { return G.chipsRead[x.key]; });
+      if (bbA.hotspot && G.hotspot) blockedA = true;
+      if (!G.typing && !blockedA) {
+        G.idle = (G.idle || 0) + dtReal;   /* 用真实时间：掉帧也不会把自动播放拖慢 */
+        var hold = 2.4 + G.text.length / 9;
+        if (bbA.auto) hold = Math.max(hold, bbA.auto * 1.6);
+        if (G.idle > hold) { G.idle = 0; advance(); }
       } else { G.idle = 0; }
-    }
+    } else { G.idle = 0; }
 
     /* 粒子 */
     for (var i = parts.length - 1; i >= 0; i--) {
@@ -2839,19 +2933,27 @@ function person(p, opts, alpha) {
     MUSIC.tick();
     if (typeof SND !== 'undefined') { var bv = (W.ball && W.ball.vis) || 0; SND.hum(bv); SND.whistle(bv); }
   /* 剪影段补一层镜头光学：整幅轻柔化再叠回，避免矢量剪影比照片还干净 */
-  if (G.scene === 'shadow' && G.film > 0.2 && !LOWFX) {
+  if (G.scene === 'shadow' && G.film > 0.2 && !fxOff()) {
     try {
       if (!window.__softCv) {
         window.__softCv = document.createElement('canvas');
-        window.__softCv.width = WIDTH; window.__softCv.height = HEIGHT;
       }
       var sc2 = window.__softCv, sctx = sc2.getContext('2d');
-      sctx.clearRect(0, 0, WIDTH, HEIGHT);
-      sctx.drawImage(CV, 0, 0, WIDTH, HEIGHT);
+      /* 半分辨率做：虚化只在 1/4 的像素上算一遍，再缩放贴回，观感一样但便宜四倍 */
+      var sw2 = Math.max(2, Math.round(CV.width / 2));
+      var sh2 = Math.max(2, Math.round(CV.height / 2));
+      if (sc2.width !== sw2 || sc2.height !== sh2) {
+        sc2.width = sw2; sc2.height = sh2;
+      }
+      sctx.setTransform(1, 0, 0, 1, 0, 0);
+      sctx.clearRect(0, 0, sw2, sh2);
+      sctx.filter = 'blur(' + (1.1 * (DPR || 1)).toFixed(1) + 'px)';
+      sctx.drawImage(CV, 0, 0, sw2, sh2);
+      sctx.filter = 'none';
       ctx.save();
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.globalAlpha = 0.34;
-      ctx.filter = 'blur(2.2px)';
-      ctx.drawImage(sc2, 0, 0, WIDTH, HEIGHT);
+      ctx.drawImage(sc2, 0, 0, CV.width, CV.height);
       ctx.restore();
     } catch (e) {}
   }
@@ -3255,7 +3357,7 @@ function person(p, opts, alpha) {
 
   /* 胶片叠加素材：按 24fps 一格格重撒，灰尘/毛屑/划痕/乳液斑/曝光跳 */
   function drawFilmDirt(t, fr) {
-    if (LOWFX) return;
+    if (fxOff()) return;
     if (G.film < 0.4) return;
     var a0 = 0.9 * G.film;
     var r = mulberry(fr * 7 + 13);
@@ -3821,6 +3923,7 @@ function person(p, opts, alpha) {
     G.cue = G.beat.cue || null;
     G.typed = 0;
     G.doneAt = 0;
+    G.idle = 0;
     G.typing = !!G.text;
     G.chipLine = '';
     G.chipsRead = {};
@@ -4028,6 +4131,20 @@ function person(p, opts, alpha) {
   } catch (e2) { }
 
   /* 顶部小工具 */
+  var btnAuto = document.getElementById('btnAuto');
+  function paintAuto() {
+    if (!btnAuto) return;
+    btnAuto.textContent = '自动播放：' + (G.autoOn ? '开' : '关');
+    if (G.autoOn) btnAuto.classList.remove('auto-off');
+    else btnAuto.classList.add('auto-off');
+  }
+  if (btnAuto) btnAuto.addEventListener('click', function (e) {
+    e.stopPropagation();
+    G.autoOn = !G.autoOn;
+    G.idle = 0;
+    paintAuto();
+  });
+  paintAuto();   /* 每次打开都是「关」，要自动播就自己按 */
   var btnSound = document.getElementById('btnSound');
   if (btnSound) btnSound.addEventListener('click', function (e) {
     e.stopPropagation();

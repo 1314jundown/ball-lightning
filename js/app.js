@@ -235,6 +235,13 @@ const ok = window.__arch.people.some(p => p.id === pid);
 if (ok && window.__arch.state().phase === 'idle') window.__arch.open(pid);
 }
 }
+const SCREEN_NOTE = [
+'封面 · 章节入口，附序章与番外',
+'七阶段 · 逐条对应研究报告 TABLE 4',
+'概念关系 · 44 个词的关系网，可切实验模式',
+'人物 · 只描关系，不虚构面孔',
+'量子玫瑰 · 观测者与坍缩'
+];
 function go(i){
 i = Math.max(0, Math.min(screens.length - 1, i));
 if (i !== cur && window.__dlgClose) window.__dlgClose();
@@ -252,10 +259,17 @@ document.body.classList.add('cover-reveal');
 screens.forEach((s, j) => s.classList.toggle('on', i === j));
 if (i === 3 && window.__stage3D) window.__stage3D.on();
 $$('#toc button').forEach((b, j) => b.setAttribute('aria-current', String(i === j)));
-$('#pageNow').textContent = '0' + i;
-$('#prev').disabled = i === 0;
-$('#next').disabled = i === screens.length - 1;
+const pageNow = $('#pageNow');
+if (pageNow) pageNow.textContent = '0' + i;
+if (window.__dockRail) window.__dockRail(i);
+document.body.dataset.screen = String(i);
+const prevBtn = $('#prev');
+const nextBtn = $('#next');
+if (prevBtn) prevBtn.disabled = i === 0;
+if (nextBtn) nextBtn.disabled = i === screens.length - 1;
 setStatus(NAV[i][0], NAV[i][1]);
+const noteEl = $('#screenNote');
+if (noteEl) noteEl.textContent = SCREEN_NOTE[i] || '';
 if (screens[i].scrollTop) screens[i].scrollTop = 0;
 if (i === 1) requestAnimationFrame(layoutChaps);
 if (window.__labFx) {
@@ -281,9 +295,10 @@ cfg.hue = (202 + T.hue + 360) % 360;
 syncHash();
 }
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(+b.dataset.go)));
-$('#prev').addEventListener('click', () => go(cur - 1));
-$('#next').addEventListener('click', () => go(cur + 1));
+if ($('#prev')) $('#prev').addEventListener('click', () => go(cur - 1));
+if ($('#next')) $('#next').addEventListener('click', () => go(cur + 1));
 addEventListener('keydown', e => {
+if (chapMode !== 'scatter' && document.getElementById('stages') && document.getElementById('stages').classList.contains('on')) return;
 if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(cur + 1); e.preventDefault(); }
 else if (e.key === 'ArrowLeft' || e.key === 'PageUp') { go(cur - 1); e.preventDefault(); }
 else if (e.key === 'Home') go(0);
@@ -304,6 +319,32 @@ const CHAP_TINT = [
 ];
 const SCATTER = [[.13,.20],[.32,.44],[.61,.20],[.49,.66],[.79,.52],[.88,.18],[.23,.76]];
 const SCATTER_N = [[.27,.15],[.60,.26],[.31,.37],[.63,.48],[.28,.59],[.61,.70],[.30,.81]];
+const CHAP_LABEL = [
+[.120, .247], [.162, .531], [.401, .214], [.397, .641],
+[.658, .436], [.772, .244], [.845, .608]
+];
+const CHAP_NODE_VID = [
+[.090, .3006], [.235, .4974], [.390, .5228], [.545, .6292],
+[.700, .4185], [.810, .5400], [.930, .5505]
+];
+const BOLT_Y = [
+[0, .3434], [.042, .3434], [.083, .2911], [.125, .3479], [.167, .4058],
+[.208, .4804], [.25, .5069], [.292, .5385], [.333, .5051], [.375, .5073],
+[.417, .5508], [.458, .5996], [.5, .6306], [.542, .6303], [.583, .4772],
+[.625, .3647], [.667, .3699], [.708, .4285], [.75, .4745], [.792, .5219],
+[.833, .5632], [.875, .4648], [.917, .6228], [.958, .3948], [1, .1408]
+];
+function boltYAt(x){
+x = Math.max(0, Math.min(1, x));
+for (let i = 1; i < BOLT_Y.length; i++){
+if (x <= BOLT_Y[i][0]){
+const a = BOLT_Y[i - 1], b = BOLT_Y[i];
+const t = (x - a[0]) / (b[0] - a[0] || 1);
+return a[1] + (b[1] - a[1]) * t;
+}
+}
+return BOLT_Y[BOLT_Y.length - 1][1];
+}
 function seqRand(seed){
 let s = seed >>> 0;
 return () => { s = (s * 1664525 + 1013904223) >>> 0; return s / 4294967296; };
@@ -334,23 +375,59 @@ A.push('<defs><radialGradient id="b' + i + '"><stop offset="0" stop-color="#fff"
 '<stop offset=".42" stop-color="' + hl + '" stop-opacity=".26"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>');
 }
 if (i === 1){
-for (let x = 18; x < 260; x += 26) line(x, 20, x, 320, .045, .6);
-for (let y = 20; y < 340; y += 26) line(18, y, 244, y, .045, .6);
-[[20, 88, 96], [34, 88, 70], [50, 88, 44]].forEach(function (c) {
-A.push('<circle cx="' + c[1] + '" cy="' + c[0] + '" r="' + c[2] + '" fill="none" stroke="' + hl + '" stroke-width=".7" opacity=".10"/>');
-});
-A.push('<circle cx="88" cy="20" r="26" fill="none" stroke="' + hl + '" stroke-width=".8" opacity=".16"/>' +
-'<circle cx="88" cy="20" r="42" fill="none" stroke="' + hl + '" stroke-width=".7" opacity=".10" stroke-dasharray="2 7"/>');
-A.push('<path d="M24 296 C 58 288, 70 244, 92 224 S 138 190, 158 148 S 196 96, 232 78" fill="none" stroke="' + hl + '" stroke-width="1.15" opacity=".58"/>' +
-'<path d="M24 296 C 58 288, 70 244, 92 224 S 138 190, 158 148" fill="none" stroke="' + hl + '" stroke-width=".8" opacity=".22" stroke-dasharray="3 6"/>');
-for (let k = 0; k < 7; k++){
-const t = k / 6, x = 24 + t * 208, y = 296 - (Math.sin(t * 2.1) * 60 + t * 118);
-A.push('<circle cx="' + x.toFixed(0) + '" cy="' + y.toFixed(0) + '" r="1.8" fill="' + hl + '" opacity=".75"/>');
+line(28, 24, 28, 252, .13, .9);
+line(232, 24, 232, 252, .13, .9);
+line(28, 24, 232, 24, .07, .7);
+line(28, 252, 232, 252, .24, 1.1);
+line(28, 238, 232, 238, .06, .7);
+A.push('<rect x="32" y="62" width="62" height="132" fill="none" stroke="' + hl + '" stroke-width="1" opacity=".32"/>' +
+'<rect x="33" y="63" width="60" height="130" fill="' + hl + '" opacity=".028"/>' +
+'<line x1="63" y1="62" x2="63" y2="194" stroke="' + hl + '" stroke-width=".7" opacity=".22"/>' +
+'<line x1="32" y1="128" x2="94" y2="128" stroke="' + hl + '" stroke-width=".7" opacity=".20"/>' +
+'<line x1="30" y1="196" x2="96" y2="196" stroke="' + hl + '" stroke-width=".9" opacity=".24"/>' +
+'<path d="M94 62 L94 194 L188 252 L132 252 Z" fill="' + hl + '" opacity=".026"/>' +
+'<path d="M94 74 L152 252" stroke="' + hl + '" stroke-width=".6" opacity=".12"/>' +
+'<path d="M94 182 L118 252" stroke="' + hl + '" stroke-width=".6" opacity=".09"/>');
+for (let k = 0; k < 30; k++){
+const y = 256 + k * 2.0, x = 30 + r() * 90, w = 34 + r() * 118;
+A.push('<line x1="' + x.toFixed(0) + '" y1="' + y.toFixed(0) + '" x2="' + (x + w).toFixed(0) + '" y2="' + y.toFixed(0) +
+'" stroke="' + hl + '" stroke-width=".6" opacity="' + f2(.03 + r() * .06) + '"/>');
 }
-line(24, 306, 232, 306, .22, .8);
-for (let x = 24; x <= 232; x += 26) line(x, 306, x, 312, .18, .7);
-A.push('<rect x="176" y="34" width="52" height="1.6" fill="' + hl + '" opacity=".22"/>' +
-'<rect x="176" y="42" width="34" height="1.6" fill="' + hl + '" opacity=".14"/>');
+A.push('<rect x="50" y="200" width="106" height="4" fill="' + hl + '" opacity=".20"/>' +
+'<line x1="56" y1="204" x2="56" y2="252" stroke="' + hl + '" stroke-width=".8" opacity=".15"/>' +
+'<line x1="150" y1="204" x2="150" y2="252" stroke="' + hl + '" stroke-width=".8" opacity=".15"/>');
+A.push('<path d="M118 200 L121 172 L139 172 L142 200 Z" fill="none" stroke="' + hl + '" stroke-width="1.1" opacity=".50"/>' +
+'<ellipse cx="130" cy="200" rx="12" ry="2.6" fill="none" stroke="' + hl + '" stroke-width=".9" opacity=".40"/>' +
+'<ellipse cx="130" cy="172" rx="9" ry="2" fill="none" stroke="' + hl + '" stroke-width=".7" opacity=".26"/>' +
+'<line x1="125" y1="175" x2="123" y2="197" stroke="' + hl + '" stroke-width=".7" opacity=".22"/>');
+A.push('<g transform="rotate(-5 191 208)">' +
+'<rect x="158" y="86" width="66" height="122" fill="none" stroke="' + hl + '" stroke-width="1.2" opacity=".44"/>' +
+'<rect x="164" y="92" width="54" height="110" fill="none" stroke="' + hl + '" stroke-width=".6" opacity=".20"/>' +
+'<line x1="164" y1="92" x2="218" y2="202" stroke="' + hl + '" stroke-width=".6" opacity=".15"/>' +
+'<line x1="218" y1="92" x2="164" y2="202" stroke="' + hl + '" stroke-width=".6" opacity=".15"/>' +
+'<path d="M186 118 L212 118 L209 142 L189 142 Z" fill="none" stroke="' + hl + '" stroke-width=".7" opacity=".11"/>' +
+'<line x1="190" y1="142" x2="184" y2="176" stroke="' + hl + '" stroke-width=".6" opacity=".08"/>' +
+'<line x1="208" y1="142" x2="214" y2="176" stroke="' + hl + '" stroke-width=".6" opacity=".08"/>' +
+'<line x1="186" y1="160" x2="212" y2="160" stroke="' + hl + '" stroke-width=".6" opacity=".07"/>' +
+'</g>');
+A.push('<ellipse cx="198" cy="292" rx="32" ry="8" fill="none" stroke="' + hl + '" stroke-width="1" opacity=".22"/>' +
+'<ellipse cx="198" cy="292" rx="26" ry="5" fill="none" stroke="' + hl + '" stroke-width=".6" opacity=".12"/>' +
+'<line x1="172" y1="296" x2="176" y2="318" stroke="' + hl + '" stroke-width=".8" opacity=".10"/>' +
+'<line x1="224" y1="296" x2="220" y2="318" stroke="' + hl + '" stroke-width=".8" opacity=".10"/>');
+for (let k = 0; k < 5; k++){
+const x0 = 178 + k * 9 + r() * 4, y0 = 287 + r() * 3, p = [];
+for (let t = 0; t <= 8; t++){
+const u = t / 8, iu = 1 - u;
+p.push((iu * iu * x0 + 2 * iu * u * (x0 - 5) + u * u * (x0 - 15)).toFixed(1) + ' ' +
+(iu * iu * y0 + 2 * iu * u * (y0 - 11) + u * u * (y0 - 22)).toFixed(1));
+}
+A.push('<polyline points="' + p.slice(0, 5).join(',') + '" fill="none" stroke="' + hl + '" stroke-width=".8" opacity=".36"/>' +
+'<polyline points="' + p.slice(4).join(',') + '" fill="none" stroke="' + hl + '" stroke-width=".8" opacity=".12"/>');
+}
+for (let k = 0; k < 40; k++){
+A.push('<circle cx="' + (32 + r() * 196).toFixed(1) + '" cy="' + (30 + r() * 210).toFixed(1) +
+'" r="' + (.5 + r() * .9).toFixed(1) + '" fill="' + hl + '" opacity="' + f2(.06 + r() * .11) + '"/>');
+}
 }
 if (i === 2){
 const pts = [];
@@ -409,7 +486,7 @@ A.push('<path d="M-10 320 L270 30" stroke="' + hl + '" stroke-width=".9" opacity
 '<path d="M40 336 L250 96" stroke="' + hl + '" stroke-width=".6" opacity=".14" stroke-dasharray="3 9"/>');
 for (let k = 0; k < 26; k++) A.push('<rect x="' + (r() * 252).toFixed(0) + '" y="' + (r() * 330).toFixed(0) + '" width="' + (2 + r() * 10).toFixed(0) + '" height="1.2" fill="' + hl + '" opacity="' + f2(.08 + r() * .2) + '"/>');
 }
-if (screens[i] && screens[i].id === 'rose'){
+if (i === 5){
 A.push('<circle cx="130" cy="150" r="104" fill="url(#b' + i + ')"/>' +
 '<defs><radialGradient id="b' + i + '"><stop offset="0" stop-color="' + hl + '" stop-opacity=".24"/>' +
 '<stop offset=".55" stop-color="' + hl + '" stop-opacity=".07"/><stop offset="1" stop-color="#000" stop-opacity="0"/></radialGradient></defs>');
@@ -455,6 +532,13 @@ A.push('<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + (c[0] + sx * 9) + '" y
 return '<svg viewBox="0 0 260 340" preserveAspectRatio="none" aria-hidden="true">' + A.join('') + '</svg>';
 }
 const chapItems = [];
+function projectVideo(vx, vy, w, h){
+const vw = 1920, vh = 1080;
+const k = Math.max(w / vw, h / vh);
+const ox = (w - vw * k) / 2, oy = (h - vh * k) / 2;
+return [(ox + vx * vw * k) / w, (oy + vy * vh * k) / h];
+}
+const chapNodeX = [];
 let chapMode = 'scatter';
 let chapIdx = 0;
 stages.forEach((s, i) => {
@@ -465,15 +549,17 @@ el.style.setProperty('--cc', CHAP_TINT[i][0]);
 el.style.setProperty('--cc2', CHAP_TINT[i][1]);
 el.innerHTML =
 '<div class="cover"><div class="art">' + chapArt(i) + '</div></div>' +
-'<div class="txt"><span class="no">' + s[0] + ' · ' + s[8].replace(/^正文\s*/, '') + '</span><span class="ttl">' + s[1].split('：')[0] + '</span>' +
-(i === 0 ? '<span class="play">▶ 进入 3D 场景</span>' : '') +
-(i === 1 ? '<span class="play">▶ 进入番外场景</span>' : '') + '</div>';
+'<div class="txt"><span class="no"><b>' + s[0] + '</b><i>' + s[8].replace(/^正文\s*/, '') + '</i></span><span class="ttl">' + s[1].split('：')[0] + '</span>' +
+(i === 0 ? '<span class="play">▶ 进入序章场景</span>' : '') +
+(i === 1 ? '<span class="play">▶ 进入番外场景</span>' : '') +
+'<span class="ent">⚡ CH.' + s[0] + ' &gt; ENTER</span></div>' +
+'<i class="nd" aria-hidden="true"></i><i class="ld" aria-hidden="true"></i>';
 chapList.appendChild(el);
 chapItems.push(el);
 });
 const HINTS = {
 scatter: '点击任意章节 · 展开实体界面',
-detail: '再次点击 · 收成一横列',
+detail: '← → 换章 · 再次点击收成一横列',
 row: '左右点选章节 · 点击展开'
 };
 function layoutChaps(){
@@ -484,11 +570,41 @@ const fit = Math.min(1, (w - 56) / 260, (h * 0.40) / 340);
 chapItems.forEach((el, i) => {
 let x = cx, y = cy, sc = 1, op = 1, z = 10, pe = 'auto', rot = 0;
 if (chapMode === 'scatter'){
-const pt = narrow ? SCATTER_N[i] : SCATTER[i];
+if (narrow){
+const pt = SCATTER_N[i];
+chapNodeX[i] = pt[0];
 x = w * pt[0]; y = h * pt[1];
-sc = narrow ? .56 : .62; op = 1; z = 10;
+sc = .56; op = 1; z = 10;
 pe = 'none'; /* 热区交给 .txt（见 CSS） */
-rot = narrow ? (i % 2 ? 1.8 : -2.2) : 0;
+rot = i % 2 ? 1.8 : -2.2;
+} else {
+const lb = CHAP_LABEL[i];
+const nd = projectVideo(CHAP_NODE_VID[i][0], CHAP_NODE_VID[i][1], w, h);
+chapNodeX[i] = nd[0];
+x = w * lb[0] + 130; y = h * lb[1] + 170;
+sc = 1; op = 1; z = 10 + i;
+pe = 'none';
+const dx = (nd[0] - lb[0]) * w, dy = (nd[1] - lb[1]) * h;
+el.style.setProperty('--ndx', dx.toFixed(1) + 'px');
+el.style.setProperty('--ndy', dy.toFixed(1) + 'px');
+const adx = Math.abs(dx), ady = Math.abs(dy);
+const ttlEl = el.querySelector('.ttl');
+const tw = Math.min(320, (ttlEl ? ttlEl.textContent.length : 4) * 37);
+let lx, ly, lw, lh;
+if (adx > ady){
+lh = 1;
+if (dx > 0){ lx = tw + 14; lw = Math.max(10, adx - tw - 22); }
+else { lx = dx + 8; lw = Math.max(10, adx - 8); }
+ly = dy;
+} else {
+lw = 1; lh = Math.max(14, ady - 104);
+lx = dx; ly = dy > 0 ? dy - lh : dy;
+}
+el.style.setProperty('--ldx', lx.toFixed(1) + 'px');
+el.style.setProperty('--ldy', ly.toFixed(1) + 'px');
+el.style.setProperty('--ldw', lw.toFixed(1) + 'px');
+el.style.setProperty('--ldh', lh.toFixed(1) + 'px');
+}
 } else if (chapMode === 'row'){
 const d = i - chapIdx;
 x = cx + d * (narrow ? 268 : 292) + rowShiftPx; y = cy;
@@ -516,8 +632,10 @@ el.style.opacity = String(op);
 el.style.zIndex = String(z);
 el.style.pointerEvents = pe;
 el.setAttribute('aria-current', String(i === chapIdx && chapMode !== 'scatter'));
+el.classList.toggle('is-on', i === chapIdx);
 });
 chapStage.dataset.mode = chapMode;
+chapList.querySelectorAll('.play').forEach(function (p) { p.style.display = chapMode === 'detail' ? 'none' : ''; });
 chapHint.textContent = HINTS[chapMode];
 const s = stages[chapIdx];
 chapCoord.textContent = 'CH.' + s[0] + '  /  ' + s[7].toUpperCase();
@@ -528,7 +646,168 @@ $('#sideTags').innerHTML = '<i>' + s[3] + '</i><i>' + s[4] + '</i><i>' + s[5] + 
 setStatus(s[3], s[4]);
 if (window.__dlgSync) window.__dlgSync();
 syncArsenalEntry(chapIdx);
+syncSceneEntry(chapIdx);
+if (window.__chapMarks) window.__chapMarks();
+if (window.__chapBolt) window.__chapBolt.sync(chapIdx);
 }
+(function boltBand(){
+const stage = document.getElementById('chapStage');
+const list = document.getElementById('chapList');
+if (!stage || !list) return;
+const P0 = .10, P1 = .93;   /* 第一击的落点 / 最后一击的落点，留边不贴屏 */
+const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const wrap = document.createElement('div');
+wrap.className = 'chap-bolt';
+wrap.setAttribute('aria-hidden', 'true');
+const vid = document.createElement('video');
+vid.className = 'chap-bolt-vid';
+vid.muted = true;
+vid.defaultMuted = true;
+vid.loop = true;
+vid.autoplay = !reduce;
+vid.playsInline = true;
+vid.setAttribute('muted', '');
+vid.setAttribute('playsinline', '');
+vid.setAttribute('preload', 'auto');
+vid.src = 'assets/bolt-chapters.mp4';
+const scrim = document.createElement('div');
+scrim.className = 'chap-bolt-scrim';
+const head = document.createElement('div');
+head.className = 'chap-bolt-head';
+wrap.appendChild(vid);
+wrap.appendChild(scrim);
+wrap.appendChild(head);
+stage.insertBefore(wrap, list);
+let cur = P0, raf = 0;
+function paint(p){
+cur = p;
+stage.style.setProperty('--bolt-p', p.toFixed(4));
+stage.style.setProperty('--bolt-y', boltYAt(p).toFixed(4));
+if (window.__chapTel) window.__chapTel.update(p);
+document.documentElement.style.setProperty('--bolt-p', p.toFixed(4));
+}
+paint(P0);
+function ease(t){ return 1 - Math.pow(1 - t, 3); }
+function to(p, ms){
+p = Math.max(P0, Math.min(P1, p));
+if (raf){ cancelAnimationFrame(raf); raf = 0; }
+if (reduce || Math.abs(p - cur) < 1e-4){ paint(p); return; }
+const from = cur, t0 = performance.now(), dur = ms || 900;
+function step(now){
+const k = Math.min(1, (now - t0) / dur);
+paint(from + (p - from) * ease(k));
+raf = k < 1 ? requestAnimationFrame(step) : 0;
+}
+raf = requestAnimationFrame(step);
+}
+function running(on){
+if (reduce) return;
+if (on){ const r = vid.play(); if (r && r.then) r.catch(function () {}); }
+else vid.pause();
+}
+if (window.IntersectionObserver){
+new IntersectionObserver(function (es) { running(es[0].isIntersecting); }, { threshold: .15 }).observe(stage);
+}
+document.addEventListener('visibilitychange', function () {
+running(!document.hidden && stage.classList.contains('on'));
+});
+window.__chapBolt = {
+sync: function (i){
+const nx = (typeof chapNodeX[i] === 'number') ? chapNodeX[i] : 0;
+to(Math.max(.05, Math.min(.98, nx)), 900);
+},
+progress: function () { return cur; },
+video: vid
+};
+})();
+(function chapTelemetry(){
+const stage = document.getElementById('chapStage');
+if (!stage) return;
+const wrap = document.createElement('div');
+wrap.className = 'chap-tel';
+wrap.setAttribute('aria-hidden', 'true');
+function rows(list){
+return list.map(function (r) {
+return '<div class="row"><span>' + r[0] + '</span>' + r[1] + '</div>';
+}).join('');
+}
+const axis = ['+30°', '+20°', '+10°', '0°', '-10°', '-20°', '-30°'].map(function (t) {
+return '<i' + (t === '0°' ? ' class="zero"' : '') + '><em></em>' + t + '</i>';
+}).join('');
+let ticks = '';
+for (let k = 0; k < 41; k++) ticks += '<s' + (k % 4 === 0 ? ' class="mj"' : '') + '></s>';
+wrap.innerHTML =
+'<div class="tel tel-axis"><span class="rail"></span><span class="minor"></span>' + axis + '</div>' +
+'<div class="tel tel-tr">' + rows([
+['PHASE', '<b data-tel="phase">0.16 rad</b>'],
+['DRIFT', '<b>0.0071</b>'],
+['FIELD', '<b class="chip">STABLE</b>']
+]) + '</div>' +
+'<div class="tel tel-bl">' + rows([
+['VEC', '<b data-tel="vec">0.090 /-0.301</b>'],
+['LAT', '<b>12.6 m/s²</b>'],
+['ENV', '<b>VACUUM</b>']
+]) + '</div>' +
+'<div class="tel tel-br">' + rows([
+['FLUX', '<b>2.41×10³</b>'],
+['TEMP', '<b>3.8 K</b>'],
+['MODE', '<b class="chip">NAV</b>']
+]) + '</div>' +
+'<div class="tel tel-axb"><span class="lb">150°</span><span class="tk">' + ticks + '</span><span class="lb">330°</span>' +
+'<span class="chap-marks" role="group" aria-label="跳到某一章">' +
+stages.map(function (s, k) {
+return '<button type="button" class="ck" style="--i:' + k + '" data-ch="' + k + '" title="' + (s[1] || '') + '"><u></u></button>';
+}).join('') +
+'</span><span class="chap-cur" aria-hidden="true"></span></div>' +
+'<div class="tel tel-top"><span>SYS.PB v2.7</span><span>CH.NAV 0045-01</span></div>';
+stage.appendChild(wrap);
+const phaseEl = wrap.querySelector('[data-tel="phase"]');
+const vecEl = wrap.querySelector('[data-tel="vec"]');
+let lastQ = -1;
+const marks = wrap.querySelector('.chap-marks');
+const curMark = wrap.querySelector('.chap-cur');
+function syncMark(){
+const k = Math.max(0, Math.min(6, chapIdx));
+if (curMark) curMark.style.setProperty('--ch', String(k / 6));
+if (marks) {
+Array.prototype.forEach.call(marks.children, function (b, n) {
+b.classList.toggle('on', n === k);
+});
+}
+}
+if (marks) {
+marks.addEventListener('click', function (e) {
+const b = e.target.closest('.ck');
+if (!b) return;
+const k = +b.dataset.ch;
+chapIdx = k;
+layoutChaps();
+if (window.__chapBolt) window.__chapBolt.sync(k);
+syncMark();
+});
+}
+window.__chapMarks = syncMark;
+syncMark();
+if (!document.querySelector('.chap-sig')){
+const sig = document.createElement('div');
+sig.className = 'chap-sig';
+sig.setAttribute('aria-hidden', 'true');
+sig.innerHTML =
+'<i class="sig-hatch"></i>' +
+'<span class="sig-body"><b>CH.01–07</b><em>七阶段 · 沿放电轨迹</em></span>' +
+'<span class="sig-dots"></span>';
+stage.appendChild(sig);
+}
+window.__chapTel = {
+update: function (p){
+const q = Math.round(p * 200);
+if (q === lastQ) return;
+lastQ = q;
+if (phaseEl) phaseEl.textContent = (p * 1.57).toFixed(2) + ' rad';
+if (vecEl) vecEl.textContent = p.toFixed(3) + ' /' + (-boltYAt(p)).toFixed(3);
+}
+};
+})();
 function arsenalHref(){
 return /\/src\/index\.html$/.test(location.pathname) ? '../dist/arsenal.html' : 'arsenal.html';
 }
@@ -565,6 +844,30 @@ host.parentNode.insertBefore(a, host.nextSibling);
 }
 a.hidden = true;
 }
+function hasScene(i){ return i === 0 || !!(stages[i] && stages[i][9] === 'anomaly'); }
+function sceneLabel(i){ return i === 0 ? '▶ 进入序章场景' : '▶ 进入番外场景'; }
+function syncSceneEntry(i){
+var host = $('#sideTags');
+if (!host || !host.parentNode) return;
+var b = document.getElementById('sceneEntry');
+if (!b){
+b = document.createElement('button');
+b.id = 'sceneEntry';
+b.type = 'button';
+b.style.cssText = 'margin-top:14px;display:inline-flex;align-items:center;gap:6px;font-family:inherit;' +
+'font-size:11px;letter-spacing:.08em;color:#cfe9ef;cursor:pointer;' +
+'border:1px solid rgba(179,205,232,.45);border-radius:999px;padding:5px 12px;background:rgba(133,154,175,.14)';
+b.addEventListener('click', function(){
+var k = +b.dataset.i;
+if (k === 0) openScene3D(); else showScene('anomaly');
+});
+host.parentNode.insertBefore(b, host.nextSibling);
+}
+var on = hasScene(i);
+b.dataset.i = String(i);
+b.textContent = sceneLabel(i);
+b.style.display = on ? 'inline-flex' : 'none';
+}
 function setChapMode(m){ chapMode = m; layoutChaps(); }
 const scene3dBox = document.getElementById('scene3d');
 const scene3dFrame = document.getElementById('scene3dFrame');
@@ -583,26 +886,97 @@ document.body.classList.add('scene3d-open');
 }
 function closeScene3D(){
 if (!scene3dBox) return;
+dropAnomalyGate();
 try { scene3dFrame && scene3dFrame.contentWindow && scene3dFrame.contentWindow.postMessage({ type: 'scene-pause' }, '*'); } catch (e) {}
 scene3dBox.hidden = true;
 document.body.classList.remove('scene3d-open');
 var pro = document.getElementById('prologue');
 if (pro) pro.classList.add('done');
 document.body.classList.remove('prologue-active', 'cover-intro');
-try { if (scene3dFrame) scene3dFrame.src = 'about:blank'; } catch (e) {}
+try { if (scene3dFrame) { scene3dFrame.src = 'about:blank'; delete scene3dFrame.dataset.which; } } catch (e) {}
+}
+function anomalyUrl(){
+var p = location.pathname;
+if (/\/scene-lab\//.test(p)) return '../../scene-lab/anomaly.html?from=site';
+if (/\/src\/index\.html$/.test(p)) return '../anomaly/index.html?from=site';
+return 'anomaly/index.html?from=site';
 }
 function sceneFrameUrl(which){
-return which === 'anomaly' ? '../../scene-lab/anomaly.html?from=site' : SCENE3D_URL + '?from=site';
+return which === 'anomaly' ? anomalyUrl() : SCENE3D_URL + '?from=site';
+}
+var anomalyGate = null;
+var anomalyAllowed = false;
+function dropAnomalyGate(){
+if (anomalyGate && anomalyGate.parentNode) anomalyGate.parentNode.removeChild(anomalyGate);
+anomalyGate = null;
+}
+function showAnomalyGate(){
+if (!scene3dBox) return;
+dropAnomalyGate();
+var wrap = document.createElement('div');
+wrap.style.cssText = 'position:absolute;inset:0;z-index:131;display:flex;align-items:center;justify-content:center;' +
+'padding:24px;background:rgba(4,6,8,.9)';
+var panel = document.createElement('div');
+panel.style.cssText = 'max-width:460px;border:1px solid rgba(201,138,63,.38);border-radius:14px;' +
+'padding:26px 28px 22px;background:rgba(12,14,17,.94);text-align:left;' +
+'box-shadow:0 24px 70px rgba(0,0,0,.65)';
+function el(tag, css, text){
+var n = document.createElement(tag);
+n.style.cssText = css;
+if (text) n.textContent = text;
+return n;
+}
+panel.appendChild(el('div', 'font-size:10px;letter-spacing:.2em;color:rgba(201,138,63,.92)', '番外 · 异象之一 · 3D 场景'));
+var offline = location.protocol === 'file:';
+panel.appendChild(el('div', 'margin-top:12px;font-size:19px;letter-spacing:.02em;color:#f2f4f6',
+offline ? '离线打开，这个场景会缺东西' : '这个场景有点重'));
+panel.appendChild(el('p', 'margin:12px 0 0;font-size:12.5px;line-height:1.95;color:rgba(216,221,226,.74)',
+offline
+? '你现在是双击打开的文件，浏览器不允许页面读取本机的模型，房间、蛋糕和杯子会退成方块（旁白、字画、检视图照常）。' +
+'想看到完整的旧屋，用线上版，或者在目录里起个本地服务再打开。'
+: '房间、道具和几组检视图都要现取，第一次进去可能要等十几秒，网慢的时候更久。' +
+'加载过就不再问；不想等的话可以先去读书，这里随时能回来。'));
+var row = el('div', 'display:flex;align-items:center;gap:10px;margin-top:20px');
+var go = el('button', 'font-family:inherit;font-size:11.5px;letter-spacing:.1em;cursor:pointer;' +
+'padding:8px 18px;border-radius:999px;border:1px solid rgba(201,138,63,.85);' +
+'background:rgba(201,138,63,.16);color:#f0d3ab', offline ? '仍然试一下' : '▶ 加载 3D');
+go.type = 'button';
+var no = el('button', 'font-family:inherit;font-size:11.5px;letter-spacing:.1em;cursor:pointer;' +
+'padding:8px 16px;border-radius:999px;border:1px solid rgba(179,205,232,.28);' +
+'background:transparent;color:rgba(216,221,226,.62)', '先不看');
+no.type = 'button';
+row.appendChild(go);
+row.appendChild(no);
+panel.appendChild(row);
+panel.appendChild(el('div', 'margin-top:14px;font-size:10.5px;color:rgba(216,221,226,.34)', '按 Esc 也可以退出'));
+wrap.appendChild(panel);
+scene3dBox.appendChild(wrap);
+anomalyGate = wrap;
+go.addEventListener('click', function(){
+anomalyAllowed = true;
+dropAnomalyGate();
+showScene('anomaly');
+});
+no.addEventListener('click', function(){ closeScene3D(); });
 }
 function showScene(which){
 if (!scene3dBox || !scene3dFrame) return;
+if (which === 'anomaly' && !anomalyAllowed){
+scene3dBox.hidden = false;
+document.body.classList.add('scene3d-open');
+var h0 = document.getElementById('scene3dHint');
+if (h0) h0.textContent = '番外 · 异象之一';
+showAnomalyGate();
+return;
+}
+dropAnomalyGate();
 const url = sceneFrameUrl(which);
 if (scene3dFrame.dataset.which !== which){
 scene3dFrame.dataset.which = which;
 scene3dFrame.src = url;
 }
 const hint = document.getElementById('scene3dHint');
-if (hint) hint.textContent = which === 'anomaly' ? '番外 · 异象之一' : '第一章 · 3D 序章';
+if (hint) hint.textContent = which === 'anomaly' ? '番外 · 异象之一' : '第一章 · 序章 · 影子戏';
 scene3dBox.hidden = false;
 document.body.classList.add('scene3d-open');
 }
@@ -633,26 +1007,23 @@ chapSuppressAt = 0;
 const el = e.target.closest('.chap-item');
 if (!el) return;
 const i = +el.dataset.i;
-if (i === 0){
-chapIdx = 0;
-openScene3D();      /* 第一章 = 3D 序章本身 */
-return;
-}
-if (stages[i] && stages[i][9] === 'anomaly'){   /* 番外：直接进 3D 异象一，不走章节说明 */
+if (e.target.closest('.play') && hasScene(i)){
 chapIdx = i;
-showScene('anomaly');
+if (i === 0) openScene3D(); else showScene('anomaly');
 return;
 }
-if (chapMode === 'scatter'){ chapIdx = i; setChapMode('detail'); }
-else if (chapMode === 'row'){ chapIdx = i; setChapMode('detail'); }
+if (chapMode === 'scatter' || chapMode === 'row'){ chapIdx = i; setChapMode('detail'); }
 else { setChapMode('row'); }
 });
 $('#chapClose').addEventListener('click', () => setChapMode('scatter'));
 addEventListener('keydown', e => {
 if (!$('#stages').classList.contains('on')) return;
-if (e.key === 'Escape'){ setChapMode('scatter'); }
-else if (chapMode === 'row' && e.key === 'ArrowRight'){ chapIdx = Math.min(6, chapIdx + 1); layoutChaps(); e.preventDefault(); }
-else if (chapMode === 'row' && e.key === 'ArrowLeft'){ chapIdx = Math.max(0, chapIdx - 1); layoutChaps(); e.preventDefault(); }
+const dlg = $('#dlg');
+if (dlg && !dlg.hidden) return;
+if (e.key === 'Escape'){ setChapMode('scatter'); return; }
+if (chapMode !== 'row' && chapMode !== 'detail') return;
+if (e.key === 'ArrowRight'){ chapIdx = Math.min(6, chapIdx + 1); layoutChaps(); e.preventDefault(); }
+else if (e.key === 'ArrowLeft'){ chapIdx = Math.max(0, chapIdx - 1); layoutChaps(); e.preventDefault(); }
 });
 let rowShiftPx = 0, chapDragging = false, chapStartX = 0, chapMoved = 0, chapSuppressAt = 0;
 const chapStep = () => (chapStage.clientWidth <= 960 ? 268 : 292); /* 同上：与 @media(max-width:960px) 对齐 */

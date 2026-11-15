@@ -1,4 +1,4 @@
-﻿/* 序章 · 影子戏试装页
+/* 序章 · 影子戏试装页
    一块全屏画布，所有画面都在 canvas 里画；文字也画在画布上，
    这样"胶片"的颗粒、抖动、遮幅能一起作用到字幕上。 */
 html, body {
@@ -26,6 +26,9 @@ canvas#acts-canvas {
   padding: 6px 12px; cursor: pointer;
 }
 #hud button:hover { border-color: rgba(230,215,190,.5); color: rgba(245,235,215,.95); }
+/* 自动播放：开着的时候点亮，关着时压暗，一眼能看出当前状态 */
+#hud button#btnAuto.auto-off { color: rgba(230,215,190,.42); border-color: rgba(230,215,190,.14); }
+#hud button#btnAuto:not(.auto-off) { color: rgba(255,236,206,.96); border-color: rgba(206,158,104,.62); background: rgba(206,158,104,.10); }
 /* 窄屏：HUD 缩小、按钮不换行、提示语不挡字幕 */
 @media (max-width: 720px) {
   #hud { padding: 8px 10px; font-size: 10px; gap: 8px; flex-wrap: nowrap; }

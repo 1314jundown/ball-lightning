@@ -1,0 +1,428 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>异象之一 · 旧屋 | 球状闪电：粒子之门</title>
+<style>
+  :root {
+    --ink: #f4f1ea;
+    --dim: #8f8a80;
+    --acc: #c98a3f;
+    --bg: #0a0a0b;
+  }
+  * { box-sizing: border-box; }
+  html, body { margin: 0; height: 100%; background: var(--bg); color: var(--ink);
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif; overflow: hidden; }
+  #stage { position: fixed; inset: 0; display: block; width: 100%; height: 100%; }
+
+  /* ---------------- 全息线框：扫描线 + 冷光渐晕 ---------------- */
+  #scan { position: fixed; inset: 0; pointer-events: none; z-index: 2; opacity: .5;
+    background: repeating-linear-gradient(0deg, rgba(140,190,255,.05) 0 1px, transparent 1px 3px); }
+  #vig { position: fixed; inset: 0; pointer-events: none; z-index: 3;
+    background: radial-gradient(ellipse at 50% 52%, transparent 42%, rgba(2,4,9,.86) 100%); }
+
+  /* ---------------- 开场 ---------------- */
+  #intro { position: fixed; inset: 0; z-index: 9; display: flex; flex-direction: column;
+    justify-content: center; padding: 0 12vw; background: rgba(8,8,9,.9);
+    transition: opacity .9s ease; }
+  #intro.gone { opacity: 0; pointer-events: none; }
+  #intro .tag { font: 12px/1 ui-monospace, Consolas, monospace; letter-spacing: .34em;
+    color: var(--acc); opacity: .8; margin-bottom: 26px; }
+  #intro h2 { font-size: clamp(22px, 2.6vw, 32px); font-weight: 500; letter-spacing: .04em;
+    margin: 0 0 22px; line-height: 1.7; }
+  #intro p { font-size: clamp(15px, 1.5vw, 18px); line-height: 2.1; color: #e8e3d6;
+    margin: 0 0 12px; opacity: 0; transition: opacity .7s ease; }
+  #intro p.on { opacity: 1; }
+  #intro .cursor::after { content: "▍"; color: var(--acc); animation: blink 1s steps(1) infinite; }
+  @keyframes blink { 50% { opacity: 0; } }
+  #goWrap { margin-top: 34px; opacity: 0; transition: opacity .6s ease; }
+  #goWrap.on { opacity: 1; }
+  button.primary, a.primary { font: 15px/1 "Noto Serif SC", serif; letter-spacing: .1em;
+    padding: 13px 30px; border-radius: 2px; border: 1px solid rgba(244,241,234,.22); cursor: pointer;
+    background: linear-gradient(180deg, #1a1917, #0f0e0d); color: #f4f1ea;
+    transition: background .2s, transform .2s; text-decoration: none; display: inline-block; }
+  button.primary:hover, a.primary:hover { background: linear-gradient(180deg, #242220, #141312); transform: translateY(-1px); }
+
+  /* ---------------- HUD ---------------- */
+  #hud { position: fixed; inset: 0; z-index: 6; pointer-events: none; opacity: 0; transition: opacity .6s; }
+  #hud.on { opacity: 1; }
+  #cross { position: absolute; left: 50%; top: 50%; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+    border: 1px solid rgba(160,190,255,.35); border-radius: 50%; }
+  #cross::after { content: ''; position: absolute; left: 50%; top: 50%; width: 3px; height: 3px;
+    margin: -1.5px 0 0 -1.5px; border-radius: 50%; background: rgba(210,225,255,.9); }
+  #cross.lock { border-color: rgba(255,195,94,.95); box-shadow: 0 0 14px rgba(255,195,94,.55); }
+  #hint { position: absolute; left: 50%; bottom: 12vh; transform: translateX(-50%);
+    font: 13px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .08em;
+    color: #f4f1ea; background: rgba(10,10,11,.7); border: 1px solid rgba(244,241,234,.14);
+    border-radius: 2px; padding: 8px 18px; white-space: nowrap; opacity: 0; transition: opacity .18s; }
+  #hint.on { opacity: 1; }
+  #hint.lock { border-color: #c98a3f; color: #f4f1ea; }
+  #clues { position: absolute; left: 28px; bottom: 26px; display: flex; align-items: center;
+    gap: 9px; font: 12px/1 ui-monospace, Consolas, monospace; color: var(--dim); letter-spacing: .12em; }
+  .cdot { width: 9px; height: 9px; border-radius: 50%; border: 1px solid rgba(244,241,234,.26); transition: all .4s; }
+  .cdot.on { background: #c98a3f; border-color: #c98a3f; box-shadow: 0 0 10px rgba(140,190,255,.9); }
+  #keys { position: absolute; right: 240px; bottom: 26px; text-align: right;
+    font: 12px/1.9 ui-monospace, Consolas, monospace; color: #8f8a80; letter-spacing: .06em; opacity: .8; }
+  #toast { position: fixed; left: 50%; bottom: 19vh; transform: translateX(-50%) translateY(8px);
+    z-index: 6; max-width: min(720px, 86vw); padding: 10px 20px; border-radius: 10px;
+    background: rgba(10,10,11,.82); border: 1px solid rgba(244,241,234,.14); color: #f4f1ea;
+    font: 14px/1.7 "Noto Serif SC", serif; letter-spacing: .02em; opacity: 0;
+    transition: opacity .35s, transform .35s; pointer-events: none; text-align: center; }
+  #toast.on { opacity: 1; transform: translateX(-50%) translateY(0); }
+  #flash { position: fixed; inset: 0; z-index: 8; pointer-events: none; background: #f4f1ea; opacity: 0; transition: opacity .5s; }
+
+  /* ---------------- 结算 ---------------- */
+  #end { position: fixed; inset: 0; z-index: 10; display: flex; flex-direction: column;
+    justify-content: center; padding: 0 12vw; background: rgba(3,5,10,.94); opacity: 0;
+    pointer-events: none; transition: opacity 1.2s; }
+  #end.on { opacity: 1; pointer-events: auto; }
+  #end .whisper { font-size: clamp(20px, 2.4vw, 30px); letter-spacing: .3em; color: #e8e3d6;
+    margin-bottom: 34px; line-height: 1.9; }
+  #end p { font-size: clamp(14px, 1.4vw, 17px); line-height: 2.15; color: #a49d90;
+    margin: 0 0 14px; max-width: 62ch; }
+  #end .acts { margin-top: 30px; display: flex; gap: 14px; }
+
+
+  /* ENDSEQ */
+  #end { padding: 0; background: #0a0a0b; display: block; overflow: hidden; }
+  #endFlow {
+    position: absolute; left: 50%; bottom: 88px; transform: translateX(-50%);
+    width: min(720px, 70vw); height: 210px; box-sizing: border-box;
+    padding: 12px 18px 14px; overflow: hidden; text-align: left;
+    font-family: "Noto Serif SC", "Source Han Serif SC", "Songti SC", serif;
+    font-size: clamp(15px, 1.5vw, 18px); line-height: 1.95; letter-spacing: 0;
+    color: #f4f1ea; word-break: break-all;
+    background: linear-gradient(180deg, rgba(10,10,11,.88), rgba(10,10,11,.66));
+    border-left: 2px solid rgba(125,140,255,.55);
+    transition: left .62s cubic-bezier(.3,0,.2,1), bottom .62s cubic-bezier(.3,0,.2,1),
+                width .62s cubic-bezier(.3,0,.2,1), height .62s cubic-bezier(.3,0,.2,1),
+                font-size .5s ease, padding .5s ease, background .55s ease,
+                border-color .55s ease, opacity .9s ease;
+  }
+  #endFlow.full {
+    left: 0; bottom: 0; transform: none;
+    width: 100vw; height: 100vh; padding: 0;
+    font-size: 23px; line-height: 1.55;
+    background: transparent; border-left-color: transparent;
+  }
+  #endFlow span.w { white-space: nowrap; }
+  #endFlow.mute { opacity: .028; }
+  #endQuote { margin: 0 0 4px; }
+  #endQuote.gone { display: none; }
+  #endQuote { margin: 0 0 10px; color: #b9b3a6; font-size: 13.5px; line-height: 1.95; }
+  #endQuote.gone { display: none; }
+  #endLast {
+    position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%);
+    font-size: clamp(64px, 11vw, 132px); line-height: 1; color: #f6f2e8;
+    opacity: 0; transition: opacity 1.1s ease; pointer-events: none;
+    text-shadow: 0 0 60px rgba(246,242,232,.22);
+  }
+  #endLast.on { opacity: 1; }
+  #endNote {
+    position: absolute; left: 50%; bottom: calc(12vh + 64px); transform: translateX(-50%);
+    font-size: 13px; letter-spacing: .14em; color: #8f8a80; opacity: 0;
+    transition: opacity 1s ease; white-space: nowrap;
+  }
+  #endNote.on { opacity: 1; }
+  #endActs { position: absolute; left: 50%; bottom: 11vh; transform: translateX(-50%);
+    display: flex; gap: 14px; opacity: 0; transition: opacity 1s ease; pointer-events: none; }
+  #endActs.on { opacity: 1; pointer-events: auto; }
+
+  /* 片尾复用原文条：框内增殖 → 撑破全屏 */
+  #quote.endbox { max-height: 210px; overflow: hidden; z-index: 30; pointer-events: none; }
+  #quote.endfull {
+    left: 0; bottom: 0; transform: none; width: 100vw; height: 100vh;
+    padding: 0; font-size: 23px; line-height: 1.55;
+    background: transparent; border-left-color: transparent; overflow: hidden;
+    transition: left .62s cubic-bezier(.3,0,.2,1), bottom .62s cubic-bezier(.3,0,.2,1),
+                width .62s cubic-bezier(.3,0,.2,1), height .62s cubic-bezier(.3,0,.2,1),
+                font-size .5s ease, padding .5s ease;
+  }
+  #quote .w { white-space: nowrap; }
+
+  /* 准星对准时浮在物体上的 E 键标 */
+  #ebadge {
+    position: absolute; left: 0; top: 0; transform: translate(-50%, -100%);
+    display: flex; flex-direction: column; align-items: center; gap: 6px;
+    opacity: 0; transition: opacity .16s ease; pointer-events: none; z-index: 7;
+  }
+  #ebadge.on { opacity: 1; }
+  #ebadge b {
+    display: flex; align-items: center; justify-content: center;
+    width: 26px; height: 26px; border-radius: 4px;
+    border: 1px solid rgba(244,241,234,.55);
+    background: rgba(10,10,11,.72);
+    font: 600 13px/1 ui-monospace, Consolas, monospace; color: #f4f1ea;
+    box-shadow: 0 2px 10px rgba(0,0,0,.55), inset 0 -1px 0 rgba(0,0,0,.5);
+  }
+  #ebadge i {
+    font: 11px/1.4 "Noto Serif SC", serif; font-style: normal;
+    color: #d8d2c4; letter-spacing: .06em; white-space: nowrap;
+    text-shadow: 0 1px 6px rgba(0,0,0,.9);
+  }
+  #sndBtn {
+    position: fixed; right: 20px; bottom: 20px; z-index: 12;
+    font: 11px/1 ui-monospace, Consolas, monospace; letter-spacing: .18em;
+    color: #8f8a80; background: transparent; border: 1px solid rgba(244,241,234,.14);
+    border-radius: 2px; padding: 8px 10px; cursor: pointer; display: none;
+  }
+  #sndBtn.on { display: block; }
+  #sndBtn:hover { color: #f4f1ea; border-color: rgba(244,241,234,.3); }
+  /* ---------------- 启动失败 ---------------- */
+  #booterr { position: fixed; inset: 0; z-index: 20; display: none; align-items: center;
+    justify-content: center; background: rgba(3,5,10,.96); }
+  #booterr.on { display: flex; }
+  .be-inner { max-width: 680px; padding: 30px; border: 1px solid rgba(244,241,234,.2); border-radius: 14px;
+    background: #0a101c; font: 14px/1.9 "Noto Serif SC", serif; color: #e8e3d6; }
+  .be-title { font-size: 18px; font-weight: 600; display: block; margin-bottom: 10px; color: #d08a6a; }
+  .be-msg { margin: 6px 0; }
+  .be-detail { color: #8f8a80; font-size: 13px; margin: 10px 0 16px; white-space: pre-wrap; }
+  .be-acts { display: flex; gap: 10px; }
+  .be-btn { padding: 9px 18px; border-radius: 8px; border: 1px solid rgba(244,241,234,.26); color: #f4f1ea;
+    text-decoration: none; font-size: 13px; }
+  .be-btn.primary { background: #141312; border-color: #5a74a8; }
+  #mmap { position: fixed; right: 18px; bottom: 18px; width: 250px; height: 250px;
+    border: 1px solid rgba(244,241,234,.13); border-radius: 10px; opacity: 1; pointer-events: none; z-index: 7; }
+  #hand { position: fixed; right: 18px; bottom: 244px; z-index: 7; pointer-events: none;
+    font: 12px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .06em; color: #c98a3f;
+    padding: 5px 10px; border: 1px solid #3a3626; border-radius: 8px; background: rgba(10,10,8,.7);
+    opacity: 0; transition: opacity .3s; }
+  #hand.on { opacity: 1; }
+  #lookBtn { position: fixed; left: 18px; top: 18px; z-index: 8; cursor: pointer;
+    font: 12px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .06em; color: #f4f1ea;
+    padding: 6px 12px; border-radius: 2px; border: 1px solid rgba(244,241,234,.16); background: rgba(10,16,28,.72); }
+  #lookBtn:hover { border-color: #4a5f8c; }
+  #verTag { position: fixed; left: 18px; top: 52px; z-index: 8; pointer-events: none;
+    font: 11px/1 ui-monospace, Consolas, monospace; color: #6f88b8; letter-spacing: .08em; }
+  #doorTag { position: fixed; left: 0; top: 0; transform: translate(-50%,-50%);
+    z-index: 7; pointer-events: none; opacity: 0; transition: opacity .25s;
+    font: 12px/1.2 ui-monospace, Consolas, monospace; letter-spacing: .1em; color: #c98a3f;
+    padding: 4px 10px; border: 1px solid rgba(255,195,94,.55); border-radius: 2px;
+    background: rgba(12,10,4,.72); white-space: nowrap; }
+  #doorTag.on { opacity: .95; }
+  /* 原文 ↔ 现场 对照卡 */
+  #cmp { position: fixed; right: 26px; top: 50%; transform: translate(140%, -50%);
+    width: 332px; z-index: 7; pointer-events: auto; cursor: pointer;
+    background: rgba(8,12,20,.90); border: 1px solid #2b3a56; border-left: 2px solid #c98a3f;
+    border-radius: 10px; padding: 14px 16px 12px; color: #f4f1ea;
+    opacity: 0; transition: transform .38s cubic-bezier(.2,.9,.25,1), opacity .38s; }
+  #cmp.on { transform: translate(0, -50%); opacity: 1; }
+  #cmp .cmp-h { font: 11px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .16em;
+    color: #c98a3f; text-transform: uppercase; margin-bottom: 8px; }
+  #cmp .cmp-t { font: 14px/1.85 "Noto Serif SC", serif; color: #e6eeff; }
+  #cmp .cmp-fig { margin-top: 10px; display: flex; gap: 14px; align-items: flex-end; justify-content: center; }
+  #cmp .cmp-fig figure { margin: 0; text-align: center; }
+  #cmp .cmp-fig figcaption { font: 10px/1.4 ui-monospace, monospace; color: #8fa3c8; margin-top: 2px; letter-spacing: .08em; }
+  #cmp .cmp-pin { font: 10px/1.4 ui-monospace, monospace; color: #7a756c; margin-top: 8px; text-align: right; }
+
+  /* 目视台：大尺寸物证面板 */
+  #examine { position: fixed; inset: 0; z-index: 40; display: none;
+    background: rgba(8,8,9,.88); backdrop-filter: blur(6px); -webkit-backdrop-filter: blur(6px); }
+  #examine.on { display: flex; }
+  #examine .ex-wrap { display: flex; gap: 26px; align-items: center;
+    width: min(1500px, 94vw); height: min(92vh, 900px); margin: auto; padding: 0 6px; }
+  #examine .ex-side { width: 300px; flex: 0 0 300px; color: #f4f1ea; }
+  #examine .ex-no { font: 11px/1.4 ui-monospace, Consolas, monospace; letter-spacing: .18em;
+    color: #c98a3f; text-transform: uppercase; }
+  #examine .ex-h { font: 24px/1.35 "Noto Serif SC", serif; margin: 10px 0 14px; color: #f4f1ea; }
+  #examine .ex-t { font: 14px/1.95 "Noto Serif SC", serif; color: #a49d90; }
+  #examine .ex-hint { margin-top: 18px; font: 11px/1.7 ui-monospace, Consolas, monospace;
+    letter-spacing: .06em; color: #7a756c; }
+  #examine .ex-stage { position: relative; flex: 1 1 auto; height: 100%; min-width: 0;
+    border: 1px solid rgba(244,241,234,.13); border-radius: 12px; overflow: hidden;
+    background: #0b0e14; cursor: ew-resize; touch-action: none; }
+  #examine .ex-stage img, #examine .ex-stage canvas { position: absolute; inset: 0;
+    width: 100%; height: 100%; object-fit: cover; display: block; }
+  #examine .ex-b { clip-path: inset(0 0 0 50%); }
+  #examine .ex-line { position: absolute; top: 0; bottom: 0; left: 50%; width: 1px;
+    background: rgba(255,212,121,.9); transform: translateX(-.5px); pointer-events: none; }
+  #examine .ex-knob { position: absolute; top: 50%; left: 50%; width: 34px; height: 34px;
+    margin: -17px 0 0 -17px; border-radius: 50%; background: rgba(255,212,121,.95);
+    box-shadow: 0 0 0 5px rgba(255,212,121,.16); pointer-events: none; }
+  #examine .ex-knob::before, #examine .ex-knob::after { content: ''; position: absolute;
+    top: 50%; width: 0; height: 0; border: 5px solid transparent; margin-top: -5px; }
+  #examine .ex-knob::before { left: 4px; border-right-color: #2a1c05; }
+  #examine .ex-knob::after { right: 4px; border-left-color: #2a1c05; }
+  #examine .ex-tag { position: absolute; bottom: 14px; font: 11px/1.4 ui-monospace, Consolas, monospace;
+    letter-spacing: .1em; padding: 4px 9px; border-radius: 2px; color: #f4f1ea;
+    background: rgba(10,10,11,.72); border: 1px solid rgba(244,241,234,.13); pointer-events: none; }
+  #examine .ex-tag.l { left: 14px; } #examine .ex-tag.r { right: 14px; border-color: #4a3a18; color: #c98a3f; }
+  #examine .ex-ph { position: absolute; inset: 0; display: flex; align-items: center; justify-content: center;
+    font: 12px/1.6 ui-monospace, Consolas, monospace; color: #6b665e; letter-spacing: .1em; text-align: center;
+    background: repeating-linear-gradient(45deg, #0d1118 0 12px, #0f141c 12px 24px); }
+  #examine .ex-close { position: absolute; right: 18px; top: 16px; z-index: 2;
+    font: 12px/1 ui-monospace, Consolas, monospace; color: #8f8a80; cursor: pointer;
+    padding: 7px 12px; border-radius: 2px; border: 1px solid rgba(244,241,234,.16); background: rgba(10,10,11,.8); }
+  #examine .ex-close:hover { border-color: #4a5f8c; color: #f4f1ea; }
+  #examine .ex-note { position: absolute; left: 50%; top: 26px; transform: translateX(-50%);
+    font: 13px/1.6 "Noto Serif SC", serif; color: #c98a3f; opacity: 0; transition: opacity .5s;
+    pointer-events: none; text-shadow: 0 2px 12px rgba(0,0,0,.9); }
+  #examine .ex-note.on { opacity: .95; }
+  #examine .ex-note { color: #f4f1ea; background: rgba(10,10,11,.78); border: 1px solid rgba(201,138,63,.55); border-radius: 3px; padding: 6px 14px; white-space: nowrap; }
+  /* 小卡片面板在大屏下放大 */
+  #cmp { width: 420px; }
+  #cmp .cmp-t { font-size: 15px; }
+
+  /* 目视台：淡入（原来是从热点扩张的黑圆，像一颗黑球，已去掉） */
+  #examine { opacity: 0; transition: opacity .26s ease; }
+  #examine.in { opacity: 1; }
+
+  #examine .ex-wrap { opacity: 0; transform: scale(.965);
+    transition: opacity .34s ease .16s, transform .62s cubic-bezier(.2,.8,.3,1) .08s; }
+  #examine.in .ex-wrap { opacity: 1; transform: none; }
+  body.ex-open #stage, body.ex-open #scan, body.ex-open #vig { filter: brightness(.42) saturate(.8); }
+  #stage, #scan, #vig { transition: filter .45s ease; }
+
+  /* ---------------- 版式：统一网格 ---------------- */
+  #lookBtn { left: 20px; top: 20px; }
+  #verTag  { left: 20px; top: 56px; font-size: 10px; letter-spacing: .14em; opacity: .55; }
+  #clues   { left: 20px; bottom: 20px; letter-spacing: .16em; }
+  #keys    { right: 240px; bottom: 20px; font-size: 11px; line-height: 1.75; opacity: .55; }
+  #mmap    { right: 20px; bottom: 20px; width: 200px; height: 200px; border-color: rgba(244,241,234,.12); border-radius: 8px; }
+  #hand    { right: 20px; bottom: 232px; }
+  #hint    { bottom: 46px; font-size: 12px; padding: 7px 15px; }
+  #toast   { bottom: 152px; }
+</style>
+</head>
+<body>
+<canvas id="stage"></canvas>
+<div id="scan"></div>
+<div id="vig"></div>
+
+<div id="intro">
+  <div class="tag">异象之一 · 旧屋</div>
+  <h2 id="iH2">那天有雷。</h2>
+  <p id="l0"></p>
+  <p id="l1"></p>
+  <p id="l2"></p>
+  <div id="goWrap"><button class="primary" id="btnGo" type="button">推门进去</button></div>
+</div>
+
+<div id="hud">
+  <div id="cross"></div>
+  <div id="ebadge"><b>E</b><i id="ebLabel"></i></div>
+  <div id="hint"></div>
+  <div id="clues">
+    <span>线索</span>
+    <i class="cdot" id="c1"></i><i class="cdot" id="c2"></i><i class="cdot" id="c3"></i>
+    <span id="cCount">0 / 3</span>
+  </div>
+  <div id="keys">W A S D 走路<br>鼠标 转头 · E 交互<br>Esc 释放鼠标</div>
+</div>
+
+<div id="toast"></div>
+<div id="flash"></div>
+
+<div id="end">
+  <div id="endFlow"></div>
+  <div id="endLast">那天有雷？</div>
+  <div id="endNote">都还在。只是每一道漆，都比记忆里浅。</div>
+  <div id="endActs">
+    <button class="primary" id="btnReplay" type="button">重看</button>
+    <button class="primary" id="btnAgain" type="button">再走一遍</button>
+    <a class="primary" href="../index.html#1">回到阅读</a>
+  </div>
+</div>
+<button id="sndBtn" type="button">♪ 声</button>
+
+<!-- 每个脚本都记一笔自己的加载结果：缺哪个文件，报错面板上就能点名 -->
+<script>
+window.__anomalyScripts = [];
+window.__scriptFail = function (name) {
+  window.__anomalyScripts.push({ src: name, ok: false });
+  var el = document.getElementById('booterr');
+  if (!el) return;
+  el.classList.add('on');
+  el.innerHTML = '<div class="be-inner">' +
+    '<b class="be-title">缺文件：' + name + '</b>' +
+    '<p class="be-msg">这个脚本没加载上，房间搭不起来。</p>' +
+    '<p class="be-detail">多半是文件不在这台机器上，或者浏览器对 file:// 的安全策略拦下了本地脚本。</p>' +
+    '<div class="be-acts"><a class="be-btn primary" href="../index.html#1">先回阅读</a>' +
+    '<a class="be-btn" href="anomaly.html">重试</a></div>' +
+    '</div>';
+};
+window.__scriptOk = function (name) { window.__anomalyScripts.push({ src: name, ok: true }); };
+</script>
+<script>window.__errs=[];addEventListener("error",function(e){window.__errs.push("ERR "+String(e.message)+" @"+String(e.filename||"").split("/").pop()+":"+e.lineno)});addEventListener("unhandledrejection",function(e){var r=e.reason;window.__errs.push("REJ "+String(r&&r.message||r)+" | "+(r&&r.stack?String(r.stack).split("\n").slice(0,3).join(" << "):""))});</script>
+<script src="assets/three.bundle.js?v=64" onerror="__scriptFail('assets/three.bundle.js')" onload="__scriptOk('assets/three.bundle.js')"></script>
+<!-- 真房间是可选的：取不到就退回程序房，不算故障 -->
+<script src="assets/glass.js?v=1"></script>
+<script src="assets/cake-blend30.js?v=1" onerror="__scriptOk('cake(optional,missing)')" onload="__scriptOk('assets/cake-blend30.js')"></script>
+<script src="assets/room-su.js?v=64" onerror="__scriptOk('room-su(optional,missing)')" onload="__scriptOk('assets/room-su.js')"></script>
+<script src="assets/bathroom.js?v=5" onerror="__scriptOk('bathroom(optional,missing)')" onload="__scriptOk('assets/bathroom.js')"></script>
+<script src="assets/room-max.js?v=64" onerror="__scriptOk('room-max(optional,missing)')" onload="__scriptOk('assets/room-max.js')"></script>
+<script src="src/scene-core.js?v=64" onerror="__scriptOk('scene-core(optional,missing)')" onload="__scriptOk('src/scene-core.js')"></script>
+<script src="assets/props.js?v=64" onerror="__scriptOk('props(optional,missing)')" onload="__scriptOk('assets/props.js')"></script>
+<script src="assets/occ-grid.js?v=1"></script>
+  <script src="src/music.js?v=1" onerror="__scriptOk('music(optional,missing)')" onload="__scriptOk('src/music.js')"></script>
+  <script src="src/anomaly.js?v=287" onerror="__scriptFail('src/anomaly.js')" onload="__scriptOk('src/anomaly.js')"></script>
+<script>if(/[?&]mark=1/.test(location.search)){var s=document.createElement("script");s.src="src/anomaly-marker.js?v=1";document.body.appendChild(s);}</script>
+<script>
+/* 兜底看门狗：脚本都在、也没弹错误面板，但房间迟迟不出来——说清楚，别让人对着黑屏等。 */
+setTimeout(function () {
+  try {
+    if (window.__anomaly && window.__anomaly.ready) return;
+    var err = document.getElementById('booterr');
+    if (err && err.classList.contains('on')) return;
+    if (!window.THREE) return; // 缺 three 时上面的 scriptFail 已经报过
+    var el = document.getElementById('booterr');
+    if (!el) { el = document.createElement('div'); el.id = 'booterr'; el.className = 'on'; document.body.appendChild(el); }
+    el.classList.add('on');
+    el.innerHTML = '<div class="be-inner"><b class="be-title">房间还没搭好</b>' +
+      '<p class="be-msg">脚本都取到了，但没有在 8 秒内完成初始化。多半是显卡/WebGL 初始化被卡住。</p>' +
+      '<p class="be-detail">状态：__anomaly=' + typeof window.__anomaly + '，WebGL2=' + (function(){try{return !!document.createElement('canvas').getContext('webgl2')}catch(e){return 'err'}})() + '，异常=' + (window.__errs||[]).slice(0,2).join(' / ') + '</p>' +
+      '<div class="be-acts"><a class="be-btn primary" href="../index.html#1">先回阅读</a>' +
+      '<a class="be-btn" href="anomaly.html">重试</a></div></div>';
+  } catch (e) { /* 看门狗自己别再抛 */ }
+}, 30000);
+</script>
+<script>
+/* 开场三句话由 anomaly.js 的 typeIntro() 逐字打出来，这里什么都不做 */
+</script>
+  <canvas id="mmap" width="196" height="196"></canvas>
+  <div id="hand"></div>
+  <div id="doorTag">卫生间</div>
+  <button id="lookBtn" type="button">画风：全息线框 · V</button>
+  <span id="verTag">v245</span>
+  <div id="examine" aria-live="polite">
+  <div class="ex-close" id="exClose">关闭 · Esc</div>
+  <div class="ex-wrap">
+    <div class="ex-side">
+      <div class="ex-no" id="exNo">EVIDENCE 01</div>
+      <div class="ex-h" id="exH"></div>
+      <div class="ex-t" id="exT"></div>
+      <div class="ex-hint" id="exHint"></div>
+    </div>
+    <div class="ex-stage" id="exStage">
+      <img id="exA" alt="">
+      <img id="exB" class="ex-b" alt="">
+      <canvas id="exCv" style="display:none"></canvas>
+      <div class="ex-ph" id="exPh">素材待生成<br>1600 × 1000 · 45° 俯视</div>
+      <div class="ex-line" id="exLine"></div>
+      <div class="ex-knob" id="exKnob"></div>
+      <div class="ex-tag l" id="exTagL"></div>
+      <div class="ex-tag r" id="exTagR"></div>
+      <div class="ex-note" id="exNote"></div>
+    </div>
+  </div>
+</div>
+<aside id="cmp" aria-live="polite"></aside>
+<script>
+/* 被主站嵌进 iframe 时，把站内跳转交给父页面处理 */
+(function(){
+  if (window.parent === window) return;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) === '#') return;
+    if (!/\.html/.test(href)) return;
+    e.preventDefault();
+    parent.postMessage({ type: 'scene-goto', href: href }, '*');
+  }, true);
+})();
+</script>
+<audio id="rainLoop" src="assets/rain-loop.mp3" loop preload="auto"></audio>
+</body>
+</html>
