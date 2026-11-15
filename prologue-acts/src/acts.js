@@ -3876,9 +3876,17 @@ function person(p, opts, alpha) {
     d.style.cssText = 'position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;background:#000;color:#d8cfbf;font:16px/2 "Noto Serif SC",serif;text-align:center;padding:0 8vw;letter-spacing:.06em;';
     d.innerHTML = '<div style="font-size:13px;letter-spacing:.4em;color:#8d8172;margin-bottom:28px">序 章 · 完</div>' +
       '<div style="font-size:28px;line-height:1.9;max-width:760px">那以后，我迷上了一样东西。<br>我要去经历他所说的美妙人生了。</div>' +
-      '<button id="act-again" style="margin-top:48px;background:none;color:#b9a98f;border:1px solid #3a322a;padding:10px 26px;border-radius:999px;font-size:14px;cursor:pointer;letter-spacing:.08em">重新看一遍</button>';
+      '<div style="margin-top:48px;display:flex;gap:14px;flex-wrap:wrap;justify-content:center">' +
+        '<button id="act-again" style="background:none;color:#b9a98f;border:1px solid #3a322a;padding:10px 26px;border-radius:999px;font-size:14px;cursor:pointer;letter-spacing:.08em">重新看一遍</button>' +
+        '<button id="act-home" style="background:none;color:#cfc4b0;border:1px solid #4a4034;padding:10px 26px;border-radius:999px;font-size:14px;cursor:pointer;letter-spacing:.08em">回到首页</button>' +
+        '<button id="act-next" style="background:none;color:#ecdcc0;border:1px solid #6a5b45;padding:10px 26px;border-radius:999px;font-size:14px;cursor:pointer;letter-spacing:.08em">看下一张</button>' +
+      '</div>';
     var again = (typeof d.querySelector === 'function') ? d.querySelector('#act-again') : null;
     if (again) again.addEventListener('click', function (e) { e.stopPropagation(); if (typeof restart === 'function') { restart(); } else { location.reload(); } });
+    var home = (typeof d.querySelector === 'function') ? d.querySelector('#act-home') : null;
+    if (home) home.addEventListener('click', function (e) { e.stopPropagation(); try { parent.postMessage({ type: 'prologue-home' }, '*'); } catch (err) {} });
+    var next = (typeof d.querySelector === 'function') ? d.querySelector('#act-next') : null;
+    if (next) next.addEventListener('click', function (e) { e.stopPropagation(); try { parent.postMessage({ type: 'prologue-next' }, '*'); } catch (err) {} });
     document.body.appendChild(d);
   }
 

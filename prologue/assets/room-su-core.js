@@ -4,6 +4,8 @@
 
    和 assets/room-su.js 的区别：这里不塞 base64，只留 file 指向 samples/room-su-core.glb，
    由 src/prologue.js 的 assetBuffer 直接 fetch 二进制 —— 省掉 60 MB JS 解析 + 45 MB base64 解码。
+   现在 file 指向 samples/room-su-core.draco.glb（离线 weld + Draco，21.5 MB → 9.2 MB，
+   节点与网格名全保留，26.7 万面一个不少）。
 
    原始资产一字未动：assets/room-su.js + samples/room-su.glb 还在，异象一继续用。
 */
@@ -13,8 +15,8 @@
     id: 'sample-room-su-core',
     label: '九十年代老宅·窗与客厅',
     role: 'room',
-    file: 'samples/room-su-core.glb',
-    bytes: 21562080,
+    file: 'samples/room-su-core.draco.glb',
+    bytes: 9595260,
     crop: { source: 'sample-room-su', keep: '窗户到客厅', triangles: 267510 },
   });
 })();

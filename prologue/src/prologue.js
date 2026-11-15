@@ -2574,7 +2574,7 @@ const ENTER_URL = params.get('enter') || '../ship-ball-lightning/website/index.h
     for (const c of S.candles) list.push(c.obj);
     const parents = S.scene.getObjectByName('family-parents');
     if (parents) list.push(parents);
-    // 灾后调查段的微光球也要能被点中：把它们并入射线目标
+    // 灾后调查段的微光球也要能被点中：把它们并入射线目标（P1 修复）
     if (AFTERMATH.on && AFTERMATH.proxies.length) list.push(...AFTERMATH.proxies);
     return list;
   }
@@ -2863,15 +2863,6 @@ const ENTER_URL = params.get('enter') || '../ship-ball-lightning/website/index.h
     // 影子戏那套（SHADOW / enterShadowPlay）定义在 boot() 里，这一层看不见，
     // 只能走 window.__prologue 这座桥 —— climax.js 取 showEndcard 也是同样的理由。
     setTimeout(() => {
-      /* 交接：蜡烛点完之后不再演旧的影子戏，直接进新写的试装版（prologue-acts） */
-      if (window.__PROLOGUE_HANDOFF !== false) {
-        try {
-          const veil = document.getElementById('veil');
-          if (veil) veil.classList.add('lift');
-          location.href = new URL('../prologue-acts/index.html', location.href).href;
-        } catch (e) { location.href = '../prologue-acts/index.html'; }
-        return;
-      }
       const api = window.__prologue || {};
       if (api.SHADOW && api.SHADOW.on && typeof api.enterShadowPlay === 'function') {
         api.enterShadowPlay(() => {
@@ -3571,7 +3562,7 @@ const ENTER_URL = params.get('enter') || '../ship-ball-lightning/website/index.h
         if (S.stage === 'window') setSash(true);
         else if (S.stage === 'cake' && S.candles.length) lightCandle(S.candles[0]);
         else if (S.stage === 'enter' && isEndcardShown()) {
-          // 回车/空格在终局卡片上 = 走主去向卡（.dest-prime，即「继续 · 异象之一」）
+          // 回车/空格在终局卡片上 = 走主去向（原来的 #enterLink 已换成 .dest-prime 卡）
           const go = $('#enterLink') || $('#destAnomaly') || $('#destContinue');
           if (go) go.click();
         }
@@ -4219,6 +4210,20 @@ const ENTER_URL = params.get('enter') || '../ship-ball-lightning/website/index.h
     SHADOW.veil = mk('shadowVeil',
       'position:fixed;inset:0;z-index:56;background:#000;opacity:0;pointer-events:none;' +
       'transition:opacity .26s linear;');
+    SHADOW.film = mk('shadowFilm',
+      'position:fixed;inset:0;z-index:55;pointer-events:none;opacity:0;' +
+      'background:radial-gradient(ellipse at 50% 42%,rgba(255,194,128,.08),rgba(12,14,24,.18) 66%,rgba(0,0,0,.48) 100%),' +
+      'linear-gradient(180deg,rgba(255,170,100,.035),rgba(40,54,88,.08));' +
+      'mix-blend-mode:multiply;transition:opacity .8s ease;');
+    SHADOW.grain = mk('shadowGrain',
+      'position:fixed;inset:-20%;z-index:55;pointer-events:none;opacity:0;' +
+      'background-image:url("data:image/svg+xml,%3Csvg xmlns=\'http://www.w3.org/2000/svg\' width=\'180\' height=\'180\' viewBox=\'0 0 180 180\'%3E%3Cfilter id=\'n\'%3E%3CfeTurbulence type=\'fractalNoise\' baseFrequency=\'.82\' numOctaves=\'2\' stitchTiles=\'stitch\'/%3E%3C/filter%3E%3Crect width=\'100%\' height=\'100%\' filter=\'url(%23n)\' opacity=\'.42\'/%3E%3C/svg%3E");' +
+      'background-size:180px 180px;mix-blend-mode:screen;transition:opacity .8s ease;');
+    SHADOW.paintingCard = mk('shadowPaintingCard',
+      'position:fixed;right:10%;top:18%;width:220px;height:154px;z-index:54;pointer-events:none;' +
+      'border:7px solid rgba(82,52,28,.9);box-shadow:0 0 0 2px rgba(18,12,8,.9),0 0 22px rgba(214,128,54,.36),0 10px 30px rgba(0,0,0,.58);' +
+      'background-image:url("/assets/shadow/painting-modern-art.png");background-size:cover;background-position:center;' +
+      'opacity:0;transition:opacity .8s ease;');
     /* 白炽那一下的闪白：只亮一瞬，不是让墙上一直白着 */
     SHADOW.flash = mk('shadowFlash',
       'position:fixed;inset:0;z-index:58;background:#fff;opacity:0;pointer-events:none;' +
@@ -4740,8 +4745,8 @@ function buildStageScene() {
   const sc = new T.Scene();
   sc.background = new T.Color(0x05060a);
   const cam = new T.PerspectiveCamera(44, Math.max(0.35, innerWidth / innerHeight), 0.1, 60);
-  cam.position.set(0, 1.36, 3.72);
-  cam.lookAt(0, 1.06, -1.6);
+  cam.position.set(0, 1.40, 1.95);
+  cam.lookAt(0, 1.10, -1.6);
 
   // Coarse plaster receiver: the projection surface has a little grain and relief.
   const plaster = plasterTexture();
@@ -4778,6 +4783,14 @@ function buildStageScene() {
   const loader = new T.TextureLoader();
   loader.setCrossOrigin('');
   const data = window.SHADOW_DATA || {};
+  // 默认启用修复后的 3D 影子模型；低配设备可用 ?shadowModels=0 回退到 PNG 剪影。
+  const useShadowModels = params.get('shadowModels') === '1';
+  const modelLoader = useShadowModels && T.GLTFLoader ? new T.GLTFLoader() : null;
+  const modelDecoderReady = modelLoader
+    ? import('/assets/shadow/models/meshopt_decoder.module.js').then(mod => {
+        modelLoader.setMeshoptDecoder(mod.MeshoptDecoder);
+      })
+    : Promise.resolve();
   const makeFigure = (name, baseFile, variantFile, fallbackKey, aspect, h, x, y, phase) => {
     const fallbackUri = data[fallbackKey];
     const base = shadowTexture(loader, fallbackUri || ('assets/shadow/' + baseFile));
@@ -4808,9 +4821,42 @@ function buildStageScene() {
     group.add(basePlane, variantPlane);
     const item = {
       name, group, base: basePlane, variant: variantPlane, phase,
-      variantReady: false, crossfade: 0,
+      variantReady: false, crossfade: 0, model: null, modelReady: false, mixer: null,
       baseFile, variantFile, fallbackKey
     };
+    if (modelLoader) {
+      const modelFile = name === 'dad' ? 'father-lite.glb' : 'mother-lite.glb';
+      modelDecoderReady.then(() => modelLoader.load('/assets/shadow/models/' + modelFile, gltf => {
+        const model = gltf.scene;
+        const box = new T.Box3().setFromObject(model);
+        const size = box.getSize(new T.Vector3());
+        const center = box.getCenter(new T.Vector3());
+        const targetHeight = 1.66 * 0.55;
+        const scale = targetHeight / Math.max(size.y, 0.001);
+        model.scale.setScalar(scale);
+        model.rotation.y = name === 'dad' ? -0.42 : 0.42;
+        model.position.set(-center.x * scale, -box.min.y * scale, 0);
+        model.traverse(node => {
+          if (!node.isMesh) return;
+          node.castShadow = true;
+          node.receiveShadow = false;
+          if (node.material) {
+            node.material = node.material.clone();
+            node.material.colorWrite = false;
+            node.material.depthWrite = false;
+          }
+        });
+        group.add(model);
+        item.model = model;
+        item.modelReady = true;
+        if (gltf.animations && gltf.animations.length) {
+          const word = '坐着不满动作';
+          const clip = gltf.animations.find(a => a.name.includes(word)) || gltf.animations[0];
+          item.mixer = new T.AnimationMixer(model);
+          item.mixer.clipAction(clip).play();
+        }
+      }, undefined, err => { console.warn('[shadow] model unavailable', modelFile, err); }));
+    }
     // Prefer the authored dad-glass/mom-stand file when it exists; keep the inline mask until it resolves.
     loader.load('assets/shadow/' + baseFile, tex => {
       if ('colorSpace' in tex) tex.colorSpace = T.SRGBColorSpace;
@@ -4841,6 +4887,104 @@ function buildStageScene() {
   const mom = makeFigure('mom', 'mom-stand.png', 'mom-turn.png', 'mom', 211 / 1024, 1.60, -0.46, 0.80, 1.7);
   sc.add(dad.group, mom.group);
 
+  const chairMat = new T.MeshStandardMaterial({ color: 0x111111, roughness: 1, metalness: 0, colorWrite: false });
+  const makeChair = (x, z) => {
+    const chair = new T.Group();
+    chair.visible = false;
+    const seat = new T.Mesh(new T.BoxGeometry(0.62, 0.06, 0.16), chairMat);
+    seat.position.set(x, 0.54, z);
+    const back = new T.Mesh(new T.BoxGeometry(0.62, 0.06, 0.06), chairMat);
+    back.position.set(x, 1.06, z + 0.22);
+    const postL = new T.Mesh(new T.BoxGeometry(0.05, 0.62, 0.06), chairMat);
+    const postR = postL.clone();
+    postL.position.set(x - 0.27, 0.82, z + 0.22);
+    postR.position.set(x + 0.27, 0.82, z + 0.22);
+    const legL = new T.Mesh(new T.BoxGeometry(0.05, 0.52, 0.05), chairMat);
+    const legR = legL.clone();
+    legL.position.set(x - 0.23, 0.28, z);
+    legR.position.set(x + 0.23, 0.28, z);
+    chair.add(seat, back, postL, postR, legL, legR);
+    chair.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    sc.add(chair);
+    if (modelLoader) {
+      modelDecoderReady.then(() => modelLoader.load('/samples/props/chair.glb', gltf => {
+        const model = gltf.scene;
+        model.rotation.x = -Math.PI / 2;
+        model.updateMatrixWorld(true);
+        const box = new T.Box3().setFromObject(model);
+        const size = box.getSize(new T.Vector3());
+        const center = box.getCenter(new T.Vector3());
+        const scale = 0.72 / Math.max(size.x, 0.001);
+        model.scale.setScalar(scale);
+        model.position.set(x - center.x * scale, -0.08 - box.min.y * scale, z - center.z * scale);
+        model.traverse(node => {
+          if (!node.isMesh) return;
+          node.castShadow = true;
+          node.receiveShadow = false;
+          node.material = new T.MeshBasicMaterial({ color: 0x050505, side: T.DoubleSide });
+        });
+        chair.children.forEach(child => { child.visible = false; });
+        chair.add(model);
+      }, undefined, err => { console.warn('[shadow] chair unavailable', err); }));
+    }
+    return chair;
+  };
+  const dadChair = makeChair(0.34, 0.05);
+  const momChair = makeChair(-0.46, 0.05);
+  const tableMat = new T.MeshBasicMaterial({ color: 0x050505, side: T.DoubleSide });
+  const table = new T.Group();
+  const tabletop = new T.Mesh(new T.BoxGeometry(2.25, 0.16, 0.30), tableMat);
+  tabletop.position.set(0, 0.95, 0.38);
+  const apron = new T.Mesh(new T.BoxGeometry(2.05, 0.14, 0.10), tableMat);
+  apron.position.set(0, 0.80, 0.38);
+  const legGeo = new T.BoxGeometry(0.10, 0.78, 0.10);
+  const legA = new T.Mesh(legGeo, tableMat);
+  const legB = legA.clone();
+  const legC = legA.clone();
+  const legD = legA.clone();
+  legA.position.set(-0.92, 0.40, 0.30);
+  legB.position.set(0.92, 0.40, 0.30);
+  legC.position.set(-0.92, 0.40, 0.46);
+  legD.position.set(0.92, 0.40, 0.46);
+  table.add(tabletop, apron, legA, legB, legC, legD);
+  sc.add(table);
+  const painting = new T.Group();
+  const frameMat = new T.MeshBasicMaterial({ color: 0x15100d, transparent: true, opacity: 0.35 });
+  const artMat = new T.MeshBasicMaterial({ color: 0x2b241d, transparent: true, opacity: 0.22 });
+  const art = new T.Mesh(new T.PlaneGeometry(0.78, 0.56), artMat);
+  art.position.set(0.88, 1.62, -1.42);
+  const frameTop = new T.Mesh(new T.BoxGeometry(0.88, 0.045, 0.035), frameMat);
+  const frameBottom = frameTop.clone();
+  const frameLeft = new T.Mesh(new T.BoxGeometry(0.045, 0.60, 0.035), frameMat);
+  const frameRight = frameLeft.clone();
+  frameTop.position.set(0.88, 1.92, -1.40);
+  frameBottom.position.set(0.88, 1.32, -1.40);
+  frameLeft.position.set(0.45, 1.62, -1.40);
+  frameRight.position.set(1.31, 1.62, -1.40);
+  painting.add(art, frameTop, frameBottom, frameLeft, frameRight);
+  sc.add(painting);
+  SCN.painting = painting;
+  if (modelLoader) {
+    modelDecoderReady.then(() => modelLoader.load('/samples/props/table.glb', gltf => {
+      const table = gltf.scene;
+      table.visible = false;
+      table.rotation.x = -Math.PI / 2;
+      table.updateMatrixWorld(true);
+      const box = new T.Box3().setFromObject(table);
+      const size = box.getSize(new T.Vector3());
+      const center = box.getCenter(new T.Vector3());
+      const scale = 1.85 / Math.max(size.x, 0.001);
+      table.scale.setScalar(scale);
+      table.position.set(-center.x * scale, 0.58 - box.min.y * scale, 0.16 - center.z * scale);
+      table.traverse(node => {
+        if (!node.isMesh) return;
+        node.material = new T.MeshBasicMaterial({ color: 0x050505, side: T.DoubleSide });
+      });
+      sc.add(table);
+      SCN.table = table;
+    }, undefined, err => { console.warn('[shadow] table unavailable', err); }));
+  }
+
   /* 第三个「圆」：加法混合的光球，不是黑片。
      黑圆片贴在黑墙上只会读成一个洞，故事里的东西得是"亮着的东西"。 */
   const ball = new T.Sprite(new T.SpriteMaterial({
@@ -4863,6 +5007,7 @@ function buildStageScene() {
   sc.add(beam);
 
   SCN.scene = sc; SCN.cam = cam; SCN.spot = spot; SCN.wall = wallMat; SCN.wallMesh = wallMesh;
+  SCN.chairs = [dadChair, momChair];
   SCN.floor = floor; SCN.ball = ball; SCN.beam = beam; SCN.dad = dad; SCN.mom = mom; SCN.figures = [dad, mom];
   S.stageScene = sc; S.stageCam = cam; SCN.ready = true;
 }
@@ -4914,12 +5059,15 @@ function applyShadowLook(t) {
   SCN.figures.forEach(fig => {
     const p = lv.pres[fig.name] || 0;
     const cf = fig.crossfade;
+    if (fig.mixer) fig.mixer.update(1 / 60);
     fig.base.material.opacity = 0.001 + p * (1 - cf) * 0.999;
     fig.variant.material.opacity = p * cf;
     fig.base.customDepthMaterial.opacity = p * (1 - cf);
     fig.variant.customDepthMaterial.opacity = p * cf;
-    fig.base.visible = p > 0.004 && cf < 0.999;
-    fig.variant.visible = p > 0.004 && cf > 0.001 && fig.variantReady;
+    const modelVisible = !!(fig.model && fig.modelReady);
+    fig.base.visible = p > 0.004 && !modelVisible && cf < 0.999;
+    fig.variant.visible = p > 0.004 && !modelVisible && cf > 0.001 && fig.variantReady;
+    if (fig.model) fig.model.visible = p > 0.004;
     // 出场 / 消失：人从地面长起来，最后又缩回去
     fig.group.scale.y = 0.55 + 0.45 * p;
     fig.group.scale.x = 0.72 + 0.28 * p;
@@ -4928,7 +5076,7 @@ function applyShadowLook(t) {
 
   /* 白炽那一下交给全屏闪白去做，墙上的曝光只抬一点点——
      1.45 那档会把聚光灯的椭圆照成一张白纸，反而看不出"炸"。 */
-  S.renderer.toneMappingExposure = 0.72 + lv.over * 0.45;
+  S.renderer.toneMappingExposure = 0.72 + lv.over * 0.45 + Math.sin(t * 0.65) * 0.015;
 }
 
 /* 步骤机：把 lv 向 tgt 柔和地靠过去（每帧一次，所以影子一直在"跟着"这句话变）。
@@ -4946,6 +5094,11 @@ function stepLook(t, dtS) {
 }
 
 function updateShadowStage(t) {
+  if (SHADOW.grain) {
+    const gx = Math.round((t * 37) % 180);
+    const gy = Math.round((t * 23) % 180);
+    SHADOW.grain.style.backgroundPosition = `${gx}px ${gy}px`;
+  }
   if (!SCN.ready || S.stageRender !== 'stage') return;
   const dtS = Math.min(0.09, t - (SCN.lastT == null ? t : SCN.lastT));
   SCN.lastT = t;
@@ -5021,8 +5174,7 @@ function fadeFigure(fig, toVariant) {
         if (d < 0.12 && d < best) { best = d; root = o; }
       });
     }
-    FRIDGE.why = why;
-    FRIDGE.root = root || null;
+    FRIDGE.why = why;    FRIDGE.root = root || null;
     return FRIDGE.root;
   }
 
@@ -5500,8 +5652,9 @@ function fadeFigure(fig, toVariant) {
     document.addEventListener('mousemove', onMove);
     document.addEventListener('pointerdown', onDown);
   }
-  /* 本函数定义在 boot() 作用域内，而 aftermath 的 investigateAftermath(:3085) 在 IIFE
-     顶层作用域，看不见它——seen≥3 后会 ReferenceError。挂到 window 上按跨作用域惯例调用。 */
+  /* 本函数定义在 boot() 作用域内（:5541 起的影子戏/冰箱/走路段都在 boot 体内），
+     而 aftermath 的 investigateAftermath(:3076) 在 IIFE 顶层作用域，看不见它——
+     seen≥3 后会 ReferenceError。挂到 window 上按跨作用域惯例调用（同 __walk/__shadowStageUpdate）。 */
   window.__startKitchenWalk = startKitchenWalk;
 
   function walkTick(dt) {
@@ -5722,6 +5875,8 @@ function enterShadowPlay(done) {
   if (S.renderer.shadowMap) S.renderer.shadowMap.enabled = true;
 
   SHADOW.veil.style.opacity = '1';
+  if (SHADOW.film) SHADOW.film.style.opacity = '0.82';
+  if (SHADOW.grain) SHADOW.grain.style.opacity = '0.07';
   SHADOW.textBox.style.opacity = '0';
   SHADOW.lines.forEach(el => { el.style.opacity = '0'; });
   SHADOW.stepBox.style.opacity = '0';
@@ -5770,7 +5925,7 @@ function enterShadowPlay(done) {
     const to = from.clone();
     to.x = side === 'dad' ? 0.48 : -0.48;
     to.y = 1.30;
-    to.z = 3.38;
+    to.z = 2.72;
     const target = new T.Vector3(side === 'dad' ? 0.30 : -0.34, 1.12, -1.6);
     const fromTarget = SCN._cameraTarget ? SCN._cameraTarget.clone() : new T.Vector3(0, 1.06, -1.6);
     SHADOW.interaction.cameraTween = Core.tween({
@@ -5791,6 +5946,14 @@ function enterShadowPlay(done) {
     SHADOW.interaction.phase = side === 'dad' ? 'dadLine' : 'momLine';
     shadowCameraTo(side, () => {
       goStep(ix, { noText: true });
+      if (side === 'dad') {
+        SHADOW.tgt.pres.dad = 1;
+        SHADOW.tgt.pres.mom = 0;
+        SHADOW.lv.pres.mom = 0;
+      } else {
+        SHADOW.tgt.pres.dad = 1;
+        SHADOW.tgt.pres.mom = 1;
+      }
       shadowDialogueSide(side);
       SHADOW.veil.style.opacity = '0';
       SHADOW.stepBox.style.opacity = '1';
@@ -5830,9 +5993,19 @@ function enterShadowPlay(done) {
       }, 130);
     }
     SHADOW.whoEl.textContent = st.who || '';
-    SHADOW.hintEl.textContent = i >= SHADOW.STEPS.length - 1 ? '空格 → 收尾' : '按一下继续';
+    SHADOW.hintEl.textContent = i === 9
+      ? '点击右侧画作继续'
+      : (i >= SHADOW.STEPS.length - 1 ? '空格 → 收尾' : '按一下继续');
     SHADOW.stepBox.style.opacity = '1';
     if (SHADOW.scrim) SHADOW.scrim.style.opacity = '1';
+    if (SCN.painting) {
+      const reveal = i >= 9 ? 1 : 0;
+      SCN.painting.visible = true;
+      SCN.painting.children.forEach((child, index) => {
+        if (child.material) child.material.opacity = index === 0 ? 0.22 + reveal * 0.78 : 0.35 + reveal * 0.65;
+      });
+    }
+    if (SHADOW.paintingCard) SHADOW.paintingCard.style.opacity = i >= 9 ? '0.95' : '0';
     if (!opts.noText) typeText(st.text);
     SHADOW.interaction.focus = st.focus || null;
     if (typeof st.onEnter === 'function') st.onEnter({ SHADOW, S, step: i });
@@ -5870,7 +6043,7 @@ function enterShadowPlay(done) {
     if (action === 'focus-mother') { if (!ev || ev.clientX < innerWidth * 0.58) beginInteractiveDialogue('mom'); return true; }
     if (action === 'tap-painting') {
       if (ev && ev.clientX < innerWidth * 0.42) return true;
-      SHADOW.interaction.phase = 'legacy'; SHADOW.stepBox.style.opacity = '1'; SHADOW.scrim.style.opacity = '1'; goStep(3); return true;
+      SHADOW.interaction.phase = 'legacy'; SHADOW.stepBox.style.opacity = '1'; SHADOW.scrim.style.opacity = '1'; goStep(10); return true;
     }
     return false;
   };
@@ -5920,6 +6093,11 @@ function enterShadowPlay(done) {
 
   SHADOW.goStep = goStep; SHADOW.advance = advance;
   SHADOW.interaction.phase = SCN.preview ? 'legacy' : 'black';
+  if (!SCN.preview) {
+    SHADOW.stepBox.style.opacity = '1';
+    SHADOW.scrim.style.opacity = '0.35';
+    SHADOW.hintEl.textContent = '点击右侧，听爸爸说';
+  }
   // 正片保持全黑，第一次点击才揭示父亲；shadowShot 预览沿用自动步骤。
   if (SCN.preview) setTimeout(() => { if (SHADOW.playing) goStep(0); }, 0);
 }
@@ -6008,6 +6186,7 @@ function enterShadowPlay(done) {
     // Screenshot-only hook: keeps the authored copy untouched while making the four wall beats reviewable.
     if (params.get('walknow')) { setTimeout(() => startKitchenWalk(function(){}), 600); }
     const shadowShot = params.get('shadowShot');
+    const shadowStep = params.get('shadowStep');
     if (shadowShot) {
       const shotValue = Math.max(0, Math.min(1, Number(shadowShot) || 0));
       const intro = $('#intro');
@@ -6020,6 +6199,16 @@ function enterShadowPlay(done) {
       SHADOW.veil.style.opacity = '0';
     }
     if (shadowShot) return;
+    if (shadowStep != null) {
+      const stepValue = Math.max(0, Math.min(SHADOW.STEPS.length - 1, Number(shadowStep) || 0));
+      const intro = $('#intro');
+      if (intro) intro.classList.add('gone');
+      enterShadowPlay();
+      SCN.preview = true;
+      SHADOW.veil.style.opacity = '0';
+      setTimeout(() => { if (SHADOW.playing) SHADOW.goStep(stepValue); }, 0);
+      return;
+    }
     await walkIn();          // ③ 脚步声走近窗子
     mountStyleBar();         // 房间亮出来之后才给风格切换栏（打字阶段不打扰）
     prewarmStyles();         // 站在窗前看的这会儿，空闲时先把点云建好

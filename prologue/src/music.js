@@ -94,6 +94,8 @@
 
   /* ---------------- 实例 ---------------- */
   function create(ctx) {
+    // setBed(v)：底噪与和弦垫的整体比例，1 = 原样
+
     const T = ctx.currentTime;
 
     const master = ctx.createGain();        master.gain.value = 0.9;
@@ -114,7 +116,8 @@
     tremLFO.connect(tremDepth).connect(trem.gain);
     tremLFO.start(T);
 
-    const padBus = ctx.createGain();        padBus.gain.value = 0.0;     // 变形段才淡入
+    let BED = 1;
+  const padBus = ctx.createGain();        padBus.gain.value = 0.0;     // 变形段才淡入
 
     /* 噪声床 */
     const noiseBuf = (function () {
@@ -252,8 +255,8 @@
       const t = at == null ? ctx.currentTime : at;
       boxFilter.frequency.setTargetAtTime(9000 * Math.pow(1200 / 9000, k), t, 0.4);
       tremDepth.gain.setTargetAtTime(0.55 * k, t, 0.6);
-      noiseGain.gain.setTargetAtTime(0.05 * k, t, 0.8);
-      padBus.gain.setTargetAtTime(0.55 * (k > 0.02 ? 1 : 0), t, 1.2);
+      noiseGain.gain.setTargetAtTime(0.05 * k * BED, t, 0.8);
+      padBus.gain.setTargetAtTime(0.55 * (k > 0.02 ? 1 : 0) * BED, t, 1.2);
     }
 
     /* ---------- 实时推进 ---------- */
@@ -334,6 +337,7 @@
       },
 
       setVolume(v) { master.gain.setTargetAtTime(v, ctx.currentTime, 0.1); return api; },
+    setBed(v) { BED = Math.max(0, v); return api; },
 
       /* 离线一次性排完（给自检验证用）：整段调子 + 指定时刻变形 / 硬切 */
       renderOffline(opts) {

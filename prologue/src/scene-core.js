@@ -55,8 +55,23 @@
     return buf.buffer;
   };
 
+  /* 样本取 buffer：优先直接拿 s.base64，否则按 s.file 拉二进制（省掉 33% base64 膨胀） */
+  const sampleBuf = async (s) => {
+    if (!s) throw new Error('no sample');
+    if (s.base64) return b64ToBuf(s.base64);
+    if (s.file) {
+      const res = await fetch(s.file, { cache: 'force-cache' });
+      if (!res.ok) throw new Error('fetch ' + s.file + ' ' + res.status);
+      return await res.arrayBuffer();
+    }
+    throw new Error('sample without data: ' + (s.id || '?'));
+  };
+
   const bufToB64 = ab => {
     const bytes = new Uint8Array(ab);
+    /* 0x8000 而不是 0x30000：fromCharCode.apply 的参数个数受调用栈限制，
+       12.7 MB 的 Draco 房间按 0x30000 分块会抛 RangeError: Maximum call stack size exceeded
+       （导出 scene.js 时就踩到了）。分块小一点只多几次循环，代价可以忽略。 */
     const chunk = 0x8000;
     let out = '';
     for (let i = 0; i < bytes.length; i += chunk) {
@@ -171,6 +186,14 @@
   /* ------------------------------------------------------------ 模型载入 */
 
   const gltfLoader = new T.GLTFLoader();
+  /* Draco 解码器：模型已离线压成 Draco，解码后几何与原始完全一致 */
+  if (T.DRACOLoader) {
+    try {
+      const draco = new T.DRACOLoader();
+      draco.setDecoderPath('assets/draco/');
+      gltfLoader.setDRACOLoader(draco);
+    } catch (e) { console.warn('DRACOLoader init failed', e); }
+  }
   const fbLoader = new T.FBXLoader();
 
   function isGLB(ab) {
@@ -337,7 +360,8 @@
   window.SceneCore = {
     THREE: T,
     toast, tween, clamp, easeInOutCubic, easeOutCubic,
-    b64ToBuf, bufToB64, kindOfFile, fmtBytes,
+    b64ToBuf,
+    sampleBuf, bufToB64, kindOfFile, fmtBytes,
     Storage, parseModel, isGLB, isFBXBinary, isBlend,
     labelOf, pathOf, findByPath, triCount, boxOf, frameObject, isMeshLike,
     createRenderer, makeEnvironment, watchResize,
