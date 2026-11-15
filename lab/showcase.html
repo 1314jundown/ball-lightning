@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>球状闪电 · 观测台</title>
+<style>
+  @font-face{font-family:'Cyberiada';src:url('assets/fonts/Cyberiada_Light.ttf') format('truetype');font-weight:300;font-display:swap}
+  :root{
+    --ink:#e8eef6; --dim:#7f8fa6; --line:rgba(150,180,215,.18);
+    --gold:#e9c37a;
+    --cy:'Cyberiada','Helvetica Neue',Arial,sans-serif;
+    --ui:-apple-system,'Segoe UI','PingFang SC','Microsoft YaHei',sans-serif;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;height:100%;background:#05070a;color:var(--ink);
+    font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+    overflow:hidden;cursor:default}
+  #gl{position:fixed;inset:0;display:block}
+  .ui{position:fixed;inset:0;pointer-events:none;user-select:none}
+  .ui a,.ui button,.ui .pick{pointer-events:auto}
+
+  /* 顶部左：双行品牌 + 竖线 + 副标题（照 A/ATRIUM 的排版） */
+  .brand{position:absolute;left:38px;top:30px;display:flex;align-items:flex-start;gap:22px}
+  .brand .mark{font-family:var(--cy);font-size:16px;line-height:1.35;letter-spacing:.42em;color:#e8eef6}
+  .brand .mark b{font-family:var(--cy);font-weight:300;display:block}
+  .brand .rule{width:1px;height:44px;background:rgba(150,180,215,.22);margin-top:2px}
+  .brand .sub{font-family:var(--ui);font-size:10px;line-height:1.7;letter-spacing:.26em;color:#8b9db3}
+  .brand .sub b{display:block;font-family:var(--cy);font-weight:400;letter-spacing:.24em;color:#a9bbd0}
+
+  .about{position:absolute;right:38px;top:32px;font-family:var(--ui);font-size:10.5px;letter-spacing:.28em;color:#8b9db3}
+
+  .plate{position:absolute;right:56px;top:138px;width:clamp(300px, 25vw, 372px);text-align:left}
+  .plate .k{font-family:var(--ui);font-size:10px;letter-spacing:.3em;color:#8b9db3}
+  .plate .k b{font-family:var(--ui);font-size:11px;color:#dce7f4;font-weight:400}
+  .plate h1{margin:14px 0 0;font-family:var(--cy);font-size:clamp(32px, 3.1vw, 44px);line-height:1.06;font-weight:300;letter-spacing:.16em;text-transform:uppercase;white-space:nowrap;color:#eef4fb}
+  .plate .cn{margin-top:12px;font-size:11.5px;letter-spacing:.46em;color:#8b9db3}
+  .plate .tag{margin-top:16px;font-size:12.5px;line-height:1.95;color:#a4b3c6;max-width:300px}
+  .plate .asg{font:400 10px/1.6 ui-monospace,monospace;letter-spacing:.26em;text-transform:uppercase;color:#74828f;margin:10px 0 0}
+    .asg.no{color:#c8955a}
+    .pick[disabled]{opacity:.35;cursor:not-allowed}
+  .plate .rows{margin-top:18px;border-top:1px solid var(--line)}
+  .plate .row{display:flex;justify-content:space-between;padding:10px 0;border-bottom:1px solid var(--line);
+    font-size:11px;color:#8b9cb0;letter-spacing:.1em}
+  .plate .row b{color:#e2ebf6;font-weight:400}
+
+  /* 切换箭头：压在名字下面居中（参考图里就是 ← 01 / 03 →） */
+  .idx{display:flex;align-items:center;justify-content:center;gap:18px;margin-top:20px;
+    font-family:var(--ui);font-size:11px;letter-spacing:.26em;color:#93a6bc}
+  .idx .n{font-family:var(--ui);font-size:12px;letter-spacing:.24em;color:#eef4fb}
+  .idx button{background:none;border:0;color:#c8d6e6;font-size:15px;padding:0 4px;cursor:pointer;line-height:1}
+  .idx button:hover{color:#fff}
+
+  .toggle{position:absolute;right:38px;bottom:64px;text-align:right;font-family:var(--ui);font-size:10.5px;
+    letter-spacing:.26em;color:#7c8fa6;line-height:2.4;width:170px;padding:16px 18px 14px;
+    background:rgba(4,7,11,.72)}
+  .toggle span{cursor:pointer;pointer-events:auto;display:block}
+  .toggle span.on{color:#cfdae7}
+  .toggle a{display:block;margin-top:14px;padding-top:12px;border-top:1px solid rgba(150,180,215,.16);
+    font-family:var(--ui);color:#a9bbd0;text-decoration:none;pointer-events:auto;letter-spacing:.22em}
+  .toggle a:hover{color:#e8eef6}
+.toggle #demoLink{white-space:nowrap;border-top:0;padding-top:0;margin-top:6px;opacity:.9}
+
+  .foot .key{font-family:var(--cy);letter-spacing:.3em;color:#8fa3ba}
+  .foot{position:absolute;left:38px;right:38px;bottom:26px;display:flex;justify-content:space-between;
+    align-items:flex-end;font-family:var(--ui);font-size:10.5px;letter-spacing:.2em;color:#8b9db3}
+  .foot .hint::before{content:"•";margin-right:8px;color:#8ea1b8}
+  .dots{display:flex;gap:9px;align-items:center;margin-top:12px;font-size:9.5px;color:#5f7188}
+  .dots i{width:24px;height:2px;background:rgba(170,195,225,.34);display:block}
+  .dots i.on{background:#fff;box-shadow:0 0 8px rgba(200,225,255,.6)}
+  .foot .c{position:absolute;left:50%;transform:translateX(-50%);color:#71849a}
+
+  .pick{position:absolute;left:50%;bottom:84px;transform:translateX(-50%);
+    background:none;border:1px solid rgba(210,225,245,.34);color:#dbe6f3;
+    padding:12px 30px;font-size:11px;letter-spacing:.3em;cursor:pointer}
+  .pick:hover{background:rgba(210,225,245,.1);color:#fff}
+
+  #boot{position:fixed;inset:0;display:flex;align-items:center;justify-content:center;
+    color:#6f8199;font-size:12px;letter-spacing:.2em}
+</style>
+</head>
+<body>
+<canvas id="gl"></canvas>
+<div id="boot">正在校准观测场…</div>
+
+<div class="ui">
+  <div class="brand">
+    <div class="mark"><b>球状闪电</b>OBSERVATORY</div>
+    <div class="rule"></div>
+    <div class="sub"><b>实时实验</b>粒子雕塑 · 001</div>
+  </div>
+  <div class="about">关于试验</div>
+  <a href="../index.html#0" style="position:fixed;right:22px;bottom:20px;z-index:20;pointer-events:auto;padding:8px 14px;border:1px solid rgba(172,197,223,.36);border-radius:2px;background:rgba(8,12,22,.82);color:#cfe0ff;font-family:ui-monospace,Consolas,monospace;font-size:10px;letter-spacing:.06em;text-decoration:none">← 返回主站</a>
+
+  <div class="plate">
+    <div class="k">PRI. <b id="pIdx">01</b> / 04 · 粒子雕塑</div>
+    <h1 id="pName">DING YI</h1>
+  <div class="cn" id="pNameCn">丁仪</div>
+    <div class="idx">
+      <button id="prev">←</button><span class="n" id="iNow">01</span> / 04<button id="next">→</button>
+    </div>
+    <div class="tag" id="pTag">相信能被观测到的东西。</div>
+    <div class="asg" id="pAsg"></div>
+    <div class="rows" id="pRows"></div>
+  </div>
+
+  <div class="toggle">
+    <span class="on" id="tDepth">深度 ON</span>
+    <span class="on" id="tBloom">泛光 ON</span>
+    <span id="tLayers">分层</span>
+    <a href="quiz.html">重新测试人格 →</a>
+    <a href="#" id="demoLink" style="margin-top:6px">演示模式 · 全解锁 →</a>
+  </div>
+
+  <button class="pick" id="pick">按回车 · 以他/她的视角开始</button>
+
+  <div class="foot">
+    <div>
+      <div class="hint">拖动旋转 · 停下回弹 · 回车进入</div>
+      <div class="dots" id="dots"></div>
+    </div>
+    <div class="c">KEY 已接入</div>
+    <div id="fIdx">01 / 04</div>
+  </div>
+</div>
+
+<script src="assets/three.bundle.js"></script>
+<script>window.__errs=[];window.onerror=function(m,s,l){window.__errs.push(String(m)+" @"+l);};</script>
+  <script src="src/showcase.js"></script>
+</body>
+</html>

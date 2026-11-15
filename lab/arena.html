@@ -1,0 +1,258 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>球状闪电 · 试验场</title>
+<style>
+  :root { --ink:#dfe9ff; --dim:#7f93b8; --accent:#7dbcff; --amber:#ffcf7a; }
+  * { box-sizing: border-box; }
+  html, body { margin:0; height:100%; background:#05070c; overflow:hidden;
+    font-family: "Noto Sans SC", system-ui, -apple-system, "Microsoft YaHei", sans-serif; color:var(--ink); }
+  canvas { display:block; }
+
+  #hud { position:fixed; inset:0; pointer-events:none; text-shadow: 0 1px 4px rgba(0,0,0,.95), 0 0 12px rgba(0,0,0,.7); }
+  .box { position:absolute; }
+  #tl { left:20px; top:16px; font-size:13px; line-height:1.9; letter-spacing:.02em; }
+  #tl b { font-weight:600; }
+  #hXpPct { font-style: normal; font-size: 11px; color: #74b6f2; margin-left: 6px; letter-spacing: .04em; }
+  #xpWrap { width:220px; height:5px; background:#101828; border-radius:3px; overflow:hidden; margin-top:6px; }
+  #xpBar { height: 9px; border-radius: 5px; background: rgba(12,24,40,.92);
+    border: 1px solid rgba(90,140,200,.28); overflow: hidden; margin-top: 7px; }
+  #xpBar > i { display: block; height: 100%; background: linear-gradient(90deg, #3f8cff, #8fd6ff);
+    box-shadow: 0 0 10px rgba(90,170,255,.55); transition: width .18s linear; }
+  #tr { right:20px; top:16px; text-align:right; font-size:13px; line-height:1.9; color:var(--dim); }
+  #tr b { color:var(--ink); font-weight:600; }
+  #hStats { margin-top:8px;font:11px/1.5 ui-monospace,Consolas,monospace;color:#8fb4dd;letter-spacing:.02em;transition:color .25s; }
+  #hStats.hi { color:#ffd479; text-shadow:0 0 10px rgba(255,190,80,.6); }
+  #bl { left:20px; bottom:18px; font-size:12px; color:var(--dim); }
+  #hpWrap { width:240px; height:8px; background:#1a0f14; border-radius:4px; overflow:hidden; margin-top:6px; }
+  #hpBar { height:100%; width:100%; background:linear-gradient(90deg,#c2413f,#ff7a6b); }
+
+  #cards { position:fixed; inset:0; display:none; align-items:center; justify-content:center;
+    background: radial-gradient(60% 60% at 50% 45%, rgba(8,18,34,.55), rgba(2,4,8,.92));
+    backdrop-filter: blur(3px); z-index: 40; }
+  #cards.on { display:flex; animation: cardIn .22s ease-out; }
+  @keyframes cardIn { from { opacity:0 } to { opacity:1 } }
+  #cardBox { width: min(880px, 92vw); }
+  .lvhdr { text-align:center; margin-bottom: 22px; }
+  .lvhdr .up { font-size: 12px; letter-spacing: .42em; color:#7fb0e8; text-indent:.42em; }
+  .lvhdr .big { font-size: 30px; letter-spacing:.16em; color:#eaf4ff; margin-top:8px;
+    text-shadow: 0 0 24px rgba(110,180,255,.55); }
+  .lvhdr .sub { font-size: 12px; color:#8ba6c8; margin-top:8px; letter-spacing:.08em; }
+  #cardRow { display:flex; gap:16px; justify-content:center; }
+  /* ---- 卡片：固定尺寸，媒体块 + 名称 + 描述 + 脚注（骨架参考 slaytheweb card.css）---- */
+  .card { position:relative; width:246px; height:318px; flex:0 0 246px; display:flex; flex-direction:column;
+    border-radius:14px; overflow:hidden; cursor:pointer; border:1px solid #26364f;
+    background:linear-gradient(180deg,rgba(14,26,44,.97),rgba(8,14,26,.97));
+    transition:transform .16s ease, border-color .16s ease, box-shadow .16s ease;
+    animation: cardRise .34s cubic-bezier(.2,.9,.25,1) both; }
+  .card:hover { transform: translateY(-6px); }
+  .card .num { position:absolute; top:10px; left:12px; z-index:2;
+    font: 11px/1 ui-monospace, Consolas, monospace; color:#4f6b90; letter-spacing:.1em; }
+  .card .media { position:relative; height:104px; display:flex; align-items:center; justify-content:center;
+    background: radial-gradient(circle at 50% 60%, rgba(60,110,190,.22), transparent 70%);
+    border-bottom:1px solid rgba(90,130,190,.16); }
+  .card .ico { width:58px; height:58px; border-radius:50%; margin:0; display:flex; align-items:center;
+    justify-content:center; font-size:24px; border:1px solid rgba(120,170,240,.3); background:rgba(20,40,70,.55); }
+  .card .rar { position:absolute; right:10px; bottom:-11px; padding:3px 9px; border-radius:999px;
+    font-size:10px; letter-spacing:.14em; background:#0c1626; color:#8aa8cc;
+    border:1px solid rgba(120,160,220,.28); }
+  .card .body { padding:16px 16px 0; display:flex; flex-direction:column; gap:8px; }
+  .card .n { font-size:17px; letter-spacing:.02em; color:#eaf3ff; margin:0; }
+  .card .d { font-size:13px; line-height:1.55; color:#9fb3d1; min-height:2.6em; }
+  .card .pips { font-size:11px; letter-spacing:.22em; color:#3f5877; min-height:14px; margin:0; }
+  .card .pips b { color:#8fd0ff; font-weight:400; }
+  .card .foot { margin-top:auto; padding:10px 16px 12px; min-height:52px;
+    border-top:1px solid rgba(90,130,190,.14); font-size:12px; line-height:1.55; color:#7d93b0; }
+  .card.common { border-color:#26364f; }
+  .card.rare { border-color:#3f7fd6; box-shadow:0 0 22px rgba(63,127,214,.22), inset 0 0 26px rgba(63,127,214,.10); }
+  .card.rare .rar { color:#a9c8ff; border-color:rgba(120,160,255,.5); }
+  .card.rare .ico { color:#a9c8ff; background:rgba(70,110,220,.22); border-color:rgba(120,160,255,.5); }
+  .card.epic { border-color:#b06cff; box-shadow:0 0 26px rgba(176,108,255,.30), inset 0 0 30px rgba(176,108,255,.14); }
+  .card.epic .rar { color:#e2bdff; border-color:rgba(190,130,255,.55); }
+  .card.epic .ico { color:#ffd89a; background:rgba(150,90,230,.24); border-color:rgba(190,130,255,.6); }
+  .card.epic .n { color:#f3e2ff; }
+  .card.locked { opacity:.62; border-style:dashed; cursor:not-allowed; filter:saturate(.55); }
+  .card.locked:hover { transform:none; }
+  .card.locked .ico { filter:grayscale(1); }
+  .card.locked .n { color:#9aa6bb; }
+  .card.locked .foot { color:#ffcf7a; border-top-color:rgba(255,190,90,.2); }
+  .lvfoot {  display:flex; justify-content:space-between; align-items:center; margin-top:20px;
+    font-size:11px; color:#6f88a8; letter-spacing:.06em; }
+  #cardBuild { display:flex; gap:6px; flex-wrap:wrap; justify-content:flex-end; }
+  #cardBuild i { font-style:normal; padding:3px 8px; border-radius:999px; border:1px solid rgba(110,150,220,.22);
+    color:#8fb0d6; background: rgba(20,40,70,.45); }
+  /* 档案侧栏 / 命中提示沿用原有 */
+  .card .s {
+    display:-webkit-box; -webkit-line-clamp:2; -webkit-box-orient:vertical; overflow:hidden;
+  }
+  #grain { position: fixed; inset: 0; pointer-events: none; z-index: 5; mix-blend-mode: screen; opacity: .5;
+    background:
+      repeating-linear-gradient(0deg, rgba(140,190,255,.035) 0 1px, transparent 1px 3px),
+      radial-gradient(ellipse at center, transparent 52%, rgba(0,0,0,.55) 100%);
+    animation: grainShift 7s steps(6) infinite; }
+  @keyframes grainShift { 0%{background-position:0 0,0 0} 100%{background-position:0 6px,0 0} }
+  #mentor {
+    position: fixed; right: 26px; bottom: 40px; max-width: min(560px, 52vw);
+    display: none; align-items: center; gap: 10px; z-index: 45;
+  }
+  #mentor.on { display: flex; }
+  #mentor .mava {
+    width: 40px; height: 40px; flex: 0 0 40px; border-radius: 50%;
+    border: 1px solid rgba(120,160,210,.42);
+    background: radial-gradient(circle at 38% 32%, rgba(90,140,210,.5), rgba(8,14,24,.95));
+    display: flex; align-items: center; justify-content: center;
+    font-size: 15px; color: #b8d2f0; letter-spacing: 0;
+  }
+  #mentor .mtxt {
+    background: rgba(8,14,24,.84); border: 1px solid rgba(120,160,210,.22);
+    border-right: 2px solid #4a86c8; border-radius: 10px; padding: 9px 13px;
+    backdrop-filter: blur(8px); box-shadow: 0 10px 30px rgba(0,0,0,.45);
+    font-family: var(--font-mono); font-size: 13px; line-height: 1.6; color: #c6d8ee;
+  }
+  #mentor b { display: block; font-size: 10px; letter-spacing: .24em; color: #4f7fb8; margin-bottom: 3px; font-weight: 400; }
+  #over { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: rgba(4,8,14,.74); backdrop-filter: blur(6px); z-index: 60; text-align: center; }
+  #over.on { display: flex; }
+  #over h2 { font-size: 30px; letter-spacing: .3em; font-weight: 400; margin: 0 0 12px; color: #eaf2ff; }
+  #over p { font-size: 13px; color: #9db2cc; letter-spacing: .06em; margin: 0 0 22px; }
+  #btnRetry { background: none; border: 1px solid rgba(140,180,230,.4); color: #dfe9ff;
+    padding: 9px 26px; border-radius: 8px; font-family: var(--font-mono); font-size: 13px; letter-spacing: .1em; cursor: pointer; }
+  #btnRetry:hover { background: rgba(120,170,230,.12); }
+  #over .again { display: inline-block; margin-top: 14px; font-size: 11px; letter-spacing: .14em;
+    color: #7f9cc0; text-decoration: none; border-bottom: 1px solid rgba(127,156,192,.35); padding-bottom: 2px; }
+  #over .again:hover { color: #dfe9ff; border-color: rgba(223,233,255,.7); }
+  #gate { position: fixed; inset: 0; display: none; align-items: center; justify-content: center;
+    background: radial-gradient(120% 90% at 50% 30%, #0a1420 0%, #04070c 70%); z-index: 300; }
+  html.gated #gate { display: flex; }
+  #gate .gcard { width: min(520px, 82vw); text-align: left; }
+  #gate .gk { font-size: 10px; letter-spacing: .3em; color: #4f7fb8; margin-bottom: 14px; }
+  #gate h2 { font-size: 26px; letter-spacing: .18em; font-weight: 400; margin: 0 0 14px; color: #eaf2ff; }
+  #gate p { font-size: 13px; line-height: 1.9; color: #93a8c2; margin: 0 0 26px; }
+  #gate .gbtn { display: block; padding: 11px 18px; margin-bottom: 10px; border-radius: 9px; text-decoration: none;
+    font-family: var(--font-mono); font-size: 13px; letter-spacing: .1em; color: #eaf2ff;
+    border: 1px solid rgba(140,190,240,.55); background: rgba(90,150,220,.14); }
+  #gate .gbtn:hover { background: rgba(90,150,220,.26); }
+  #gate .gbtn.ghost { border-color: rgba(140,180,230,.22); background: none; color: #9db2cc; }
+  #gate .gbtn.ghost:hover { border-color: rgba(140,180,230,.45); color: #dfe9ff; }
+</style>
+
+<style>
+/* @@CARD-FX@@ 卡牌效果层：悬停抬起 / 背后光晕 / 玻璃透光 / 倒影 */
+#cardRow { transform-style: preserve-3d; }
+.card {
+  border-radius: 18px;
+  backdrop-filter: blur(14px) saturate(1.15);
+  -webkit-backdrop-filter: blur(14px) saturate(1.15);
+  background: linear-gradient(180deg, rgba(18,30,50,.62), rgba(8,14,26,.72));
+  -webkit-box-reflect: below 12px linear-gradient(transparent 62%, rgba(255,255,255,.14));
+  transition: transform .30s cubic-bezier(.2,.8,.2,1), border-color .30s ease, box-shadow .30s ease;
+  will-change: transform;
+}
+.card::before {
+  content: ""; position: absolute; inset: -52px; border-radius: 78px; z-index: -1;
+  background: radial-gradient(closest-side, var(--glow, rgba(90,150,255,.45)), transparent 72%);
+  filter: blur(16px); opacity: 0; transition: opacity .32s ease; pointer-events: none;
+}
+.card:hover { transform: translateY(-11px) rotateX(3deg); border-color: var(--edge, #7fb0ff); }
+.card:hover::before { opacity: .92; }
+.card:hover { box-shadow: 0 26px 72px -26px var(--shadow, rgba(90,150,255,.55)); }
+.card:hover .media { background: radial-gradient(circle at 50% 58%, var(--glow, rgba(60,110,190,.3)), transparent 72%); }
+.card:hover .ico { transform: scale(1.06); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
+
+.card.common { --glow: rgba(80,130,190,.42); --edge: rgba(150,190,240,.55); --shadow: rgba(60,120,200,.5); }
+.card.rare   { --glow: rgba(70,130,255,.55); --edge: rgba(150,200,255,.7);  --shadow: rgba(70,140,255,.6); }
+.card.epic   { --glow: rgba(176,108,255,.55); --edge: rgba(210,160,255,.75); --shadow: rgba(176,108,255,.62); }
+.card.locked { -webkit-box-reflect: none; }
+.card.locked::before { display: none; }
+</style>
+</head>
+<body>
+<div id="grain"></div>
+<div id="mentor"><div class="mava" id="mava"></div><div class="mtxt"><b id="mname"></b><span id="mtext"></span></div></div>
+<div id="toast" style="position:fixed;left:50%;top:96px;transform:translateX(-50%);z-index:7;font-size:13px;letter-spacing:.1em;color:#ffd9a0;opacity:0;transition:opacity .3s;pointer-events:none"></div>
+<div id="bossWrap" style="display:none;position:fixed;left:50%;top:10px;transform:translateX(-50%);width:min(560px,62vw);z-index:6;text-align:center">
+  <div style="font:11px/1 ui-monospace,Consolas,monospace;color:#ffcf80;letter-spacing:.18em;margin-bottom:9px;line-height:1.5">宏电子 · 试验体</div>
+  <div style="height:6px;margin-top:2px;background:rgba(120,160,220,.14);border-radius:4px;overflow:hidden">
+    <i id="bossFill" style="display:block;height:100%;width:100%;background:linear-gradient(90deg,#ff8a4c,#ffd39a)"></i>
+  </div>
+  <div id="bossState" style="font:10px/1 ui-monospace,Consolas,monospace;color:#8fb6dd;margin-top:4px;letter-spacing:.12em">实体</div>
+</div>
+<div id="boot">正在预热试验场…</div>
+
+<div id="hud">
+  <div class="box" id="tl">
+    <div>等级 <b id="hLv">1</b> · 当量 <b id="hPow">100</b> <b id="hBranch" style="color:#8fb6dd;font-weight:500;font-size:11px;letter-spacing:.08em"></b></div>
+    <div id="xpWrap"><div id="xpBar"><i id="xpFill"></i></div></div>
+    <div class="xpnum"><span id="hXpNum">0 / 5</span> <em id="hXpPct" style="font-style:normal;font-size:12px;font-weight:600;color:#8ecbff;letter-spacing:.06em">0%</em></div>
+    <div class="xpnum" style="color:#8fa8c8">击散 <b id="hDisp">0 / 0</b></div>
+  </div>
+  <div class="box" id="tr">
+    <div>击杀 <b id="hKill">0</b></div>
+    <div>时间 <b id="hTime">0:00</b></div>
+    <div>波次 <b id="hWave">1</b></div>
+  </div>
+  <div class="box" id="bl">
+    <div>生命 <b id="hHp">100</b></div>
+    <div id="hpWrap"><div id="hpBar"></div></div>
+    <div id="hStats">伤害 4.0 · 间隔 0.55s · 连锁 0 · 索敌 6m</div>
+    <div style="margin-top:6px;color:#6f84a8">WASD / 鼠标移动 · 自动放电 · M 静音 · D 演示模式 · <a href="quiz.html" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35)">重新测试</a> · <a id="backLab" href="showcase.html" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35)">← 返回武器库</a> · <a id="backHome" href="../index.html#0" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35);pointer-events:auto">← 返回主站</a></div>
+  </div>
+</div>
+
+<div id="cards"><div id="cardBox">
+  <div class="lvhdr">
+    <div class="up">LEVEL UP</div>
+    <div class="big">等级提升</div>
+    <div class="sub"><span id="cardLv">1</span> 级 · 选一项强化（按 1 / 2 / 3 直接选）</div>
+  </div>
+  <div id="cardRow"></div>
+  <div class="lvfoot"><span id="cardTip">按数字键或点击选择 · 本局构筑</span><span id="cardBuild"></span></div>
+    <div class="lvfoot" id="cardLockRow" style="justify-content:flex-end;margin-top:6px;opacity:.9"></div>
+</div></div>
+
+<div id="gate">
+  <div class="gcard">
+    <div class="gk">BALL LIGHTNING · 准入</div>
+    <h2>还没有身份</h2>
+    <p>试验场只对通过入学测试的人开放。五道题，你会拿到一件属于自己的武器——以及一个只能由你来打的视角。</p>
+    <a class="gbtn" href="quiz.html">参加入学测试 →</a>
+    <a class="gbtn ghost" href="showcase.html">我已经测过 · 去武器库</a>
+    <a class="gbtn ghost" href="../index.html#0">← 返回主站</a>
+  </div>
+</div>
+
+<div id="over">
+  <div>
+    <h2 id="overTitle">试验终止</h2>
+    <p id="overInfo"></p>
+    <button id="btnRetry">再来一次</button>
+    <br><a class="again" href="quiz.html">重新测试人格 →</a>
+  </div>
+</div>
+
+<script src="assets/three.bundle.js" onerror="__scriptFail && __scriptFail()"></script>
+<script src="assets/three.quarks.js" onerror="__scriptFail && __scriptFail()"></script>
+<script>
+(function () {
+  var b = '', q = '';
+  try { b = localStorage.getItem('bl.branch') || ''; } catch (e) {}
+  var m = location.search.match(/[?&]b=([a-z]+)/);
+  if (m) q = m[1];
+  if (!b && !q) { document.documentElement.classList.add('gated'); return; }
+  if (q) { try { localStorage.setItem('bl.branch', q); } catch (e) {} }
+  var s = document.createElement('script');
+  s.src = 'src/arena.js?v=96';
+  document.body.appendChild(s);
+})();
+</script>
+<div id="fpsMeter" style="position:fixed;left:14px;bottom:6px;font:10px/1.6 ui-monospace,Menlo,monospace;color:rgba(150,180,215,.45);letter-spacing:.06em;pointer-events:none;z-index:5"></div>
+<div id="hitflash"></div>
+<style>
+#hitflash{position:fixed;inset:0;pointer-events:none;z-index:60;opacity:0;
+  background:radial-gradient(circle at 50% 55%, rgba(255,255,255,.95), rgba(190,225,255,.55) 60%, rgba(190,225,255,0) 100%);
+  mix-blend-mode:screen;will-change:opacity}
+</style>
+</body>
+</html>

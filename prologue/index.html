@@ -1,0 +1,220 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>序章 · 窗 | 球状闪电：粒子之门</title>
+<link rel="stylesheet" href="src/ui.css?v=37">
+<link rel="stylesheet" href="src/prologue.css?v=41">
+<link rel="stylesheet" href="src/typewriter.css?v=37">
+<style>
+/* 启动失败面板：正常时不出现；出问题时把原因写在黑屏上，总比让用户对着黑屏猜 */
+#booterr {
+  position: fixed; inset: 0; z-index: 9999; display: none;
+  align-items: center; justify-content: center; padding: 6vh 5vw;
+  background: radial-gradient(120% 90% at 50% 40%, #12151f 0%, #05060a 70%);
+  font-family: ui-monospace, "Cascadia Mono", Consolas, monospace; color: #d8deee;
+}
+#booterr.on { display: flex; }
+#booterr .be-inner { max-width: 620px; width: 100%; }
+#booterr .be-title { display: block; font-size: 18px; letter-spacing: .18em; color: #ff8f8f; margin-bottom: 14px; }
+#booterr .be-msg { font-size: 14px; line-height: 1.9; color: #e6eaf6; margin: 0 0 14px; }
+#booterr .be-detail {
+  font-size: 11.5px; line-height: 1.7; color: #9aa4bd; white-space: pre-wrap;
+  border-left: 2px solid #33405e; padding: 8px 12px; margin: 0 0 16px;
+  max-height: 34vh; overflow: auto;
+}
+#booterr .be-hint { font-size: 12px; line-height: 1.8; color: #7f8aa3; margin: 0 0 20px; }
+#booterr .be-acts { display: flex; gap: 12px; flex-wrap: wrap; }
+#booterr .be-btn {
+  display: inline-block; padding: 10px 22px; border-radius: 999px; cursor: pointer;
+  border: 1px solid #33405e; background: transparent; color: #d8deee;
+  font: inherit; font-size: 13px; text-decoration: none; letter-spacing: .04em;
+}
+#booterr .be-btn.primary { background: #7d8cff; border-color: #7d8cff; color: #07080d; font-weight: 650; }
+#booterr .be-btn:hover { border-color: #7d8cff; }
+</style>
+</head>
+<body class="prologue">
+<canvas id="stage"></canvas>
+<div class="grain"></div>
+<div class="vignette"></div>
+<div class="warm" id="warm"></div>
+<div class="veil" id="veil"></div>
+
+<!-- 闪电全屏白炽与闪爆层 -->
+<div class="flash-bang" id="flashBang"></div>
+
+<header class="p-head">
+  <div class="mark">球状闪电 · 序章</div>
+  <div class="camera-help" id="cameraHelp">拖拽旋转 · 滚轮缩放</div>
+  <div class="p-actions">
+    <button id="btnSound" aria-pressed="true">声音：开</button>
+    <button id="btnSkip">跳过 →</button>
+  </div>
+</header>
+
+<!-- 开场：全黑界面 + 淡淡提示（按空格或点击开始） + 黑客式逐字打字 -->
+<div class="intro" id="intro">
+  <div class="intro-prompt" id="introPrompt">
+    <span class="prompt-key">SPACE</span>
+    <span class="prompt-text">按空格键 或 点击屏幕开始</span>
+  </div>
+  <div class="intro-inner">
+    <p class="intro-line" id="introLine0"></p>
+    <p class="intro-line" id="introLine1"></p>
+  </div>
+  <div class="intro-sound" id="introSound">点击任意处开启声音</div>
+</div>
+
+<!-- 「序曲」：不再压在窗户上，改为落在“转身平视蛋糕”那个镜头上（见 playOverture(true)） -->
+<div class="overture" id="overture"><span>序曲</span></div>
+
+<div class="chapter" id="chapter">
+  <div class="big">序 章</div>
+  <div class="small" id="chapterSub">雨 · 窗 · 一支蜡烛</div>
+</div>
+
+<!-- 3D 沉浸式空间字幕层（原生态漂浮字幕） -->
+<div class="spatial-subtitles" id="spatialSubs">
+  <div class="spatial-line" id="spLine"></div>
+</div>
+
+<div class="hint" id="hint"></div>
+<div class="cursor-tip" id="cursorTip"></div>
+
+<!-- 终局分流卡片（三大去向：查阅档案、继续推进、武器试验） -->
+<div class="endcard" id="endcard">
+  <div class="inner">
+    <p class="k">新生之夜 · 命运转折</p>
+    <h1>世界在身边爆炸</h1>
+    <p class="sub" id="endSub">
+      大理石般的灰白雕像已如雪崩般消逝，只留下两小堆余烬。<br>
+      你拉开夹克，内衬背心化作飞灰，掌上机熔为塑料……<br>
+      世界已不复存在，你将成为单纯追寻一个目标的机器。
+    </p>
+    <div class="dest-grid">
+      <a class="dest-card dest-prime" id="destAnomaly" href="anomaly.html">
+        <div class="dest-badge">两年后</div>
+        <div class="dest-title">继续 · 异象之一 →</div>
+        <div class="dest-desc">回老家收房：桌上的薄灰、倒扣的杯子、一幅画面朝下的画，还有盥洗池边的头发</div>
+      </a>
+      <a class="dest-card" id="destHome" href="../index.html#1">
+        <div class="dest-badge">阅读</div>
+        <div class="dest-title">进入主页 →</div>
+        <div class="dest-desc">回到主站，从第一章开始读：七阶段、三种镜头、概念关系网与量子玫瑰</div>
+      </a>
+    </div>
+    <button class="again" id="btnReplay">重温序章</button>
+  </div>
+</div>
+
+<!-- 每个脚本都记一笔自己的加载结果：缺哪个文件，报错面板上就能点名 -->
+<script>
+window.__prologueScripts = [];
+window.__scriptFail = function (name) {
+  window.__prologueScripts.push({ src: name, ok: false });
+  var el = document.getElementById('booterr');
+  if (!el) {
+    el = document.createElement('div');
+    el.id = 'booterr';
+    el.className = 'on';
+    document.body.appendChild(el);
+  }
+  var inner = el.querySelector('.be-inner');
+  if (!inner) {
+    inner = document.createElement('div');
+    inner.className = 'be-inner';
+    el.appendChild(inner);
+  }
+  inner.innerHTML =
+    '<b class="be-title">脚本没加载成功</b>' +
+    '<p class="be-msg">' + name + ' 取不到（文件缺失、或被浏览器的 file:// 安全策略拦下）。</p>' +
+    '<p class="be-hint">可以换成 http 方式打开（如 python -m http.server），或直接进入故事。</p>' +
+    '<div class="be-acts"><a class="be-btn primary" href="../index.html#1">进入游戏 →</a>' +
+    '<button class="be-btn" onclick="location.reload()" type="button">重新加载</button></div>';
+  el.classList.add('on');
+};
+window.__scriptOk = function (name) { window.__prologueScripts.push({ src: name, ok: true }); };
+</script>
+<script>window.__errs=[];addEventListener("error",function(e){window.__errs.push("ERR "+String(e.message)+" @"+String(e.filename||"").split("/").pop()+":"+e.lineno)});addEventListener("unhandledrejection",function(e){var r=e.reason;window.__errs.push("REJ "+String(r&&r.message||r)+" | "+(r&&r.stack?String(r.stack).split("\n").slice(0,3).join(" << "):""))});</script>
+<script src="assets/three.bundle.js?v=37" onerror="__scriptFail('assets/three.bundle.js')" onload="__scriptOk('assets/three.bundle.js')"></script>
+<script src="assets/samples.js?v=37" onerror="__scriptFail('assets/samples.js')" onload="__scriptOk('assets/samples.js')"></script>
+<script src="assets/room-su-core.js?v=1" onerror="__scriptFail('assets/room-su-core.js')" onload="__scriptOk('assets/room-su-core.js')"></script>
+<!-- room-max / restaurant 不再无条件加载：?room=sample-room-max 时由 src/prologue.js 的 ensureRoomSample() 补加载 -->
+<script src="assets/cake-blend30.js?v=37" onerror="__scriptFail('assets/cake-blend30.js')" onload="__scriptOk('assets/cake-blend30.js')"></script>
+<script src="src/mc-bridge.js?v=37" onerror="__scriptFail('src/mc-bridge.js')" onload="__scriptOk('src/mc-bridge.js')"></script>
+<script src="src/scene-core.js?v=37" onerror="__scriptFail('src/scene-core.js')" onload="__scriptOk('src/scene-core.js')"></script>
+<script src="src/typewriter.js?v=37" onerror="__scriptFail('src/typewriter.js')" onload="__scriptOk('src/typewriter.js')"></script>
+<script src="src/music.js?v=1" onerror="__scriptFail('src/music.js')" onload="__scriptOk('src/music.js')"></script>
+<script src="src/climax.js?v=169" onerror="__scriptFail('src/climax.js')" onload="__scriptOk('src/climax.js')"></script>
+<script src="src/shadow-data.js?v=1" onerror="__scriptFail('src/shadow-data.js')" onload="__scriptOk('src/shadow-data.js')"></script>
+<script src="src/prologue.js?v=169" onerror="__scriptFail('src/prologue.js')" onload="__scriptOk('src/prologue.js')"></script>
+<script>
+/* 兜底看门狗：脚本都在、也没弹错误面板，但开场迟迟不动——说明它悄悄静默失败了。
+   6.5s 还一个字没打出来，就把话说清楚，别让用户对着黑屏猜。 */
+setTimeout(function () {
+  try {
+    // 已经切进「纯文字开场」或已弹出具体原因时，别再盖一层
+    if (window.__textOnlyIntro || window.__fallbackShown) return;
+    var err = document.getElementById('booterr');
+    if (err && err.classList.contains('on')) return;
+    var l0 = document.getElementById('introLine0');
+    if (l0 && l0.textContent && l0.textContent.length > 0) return;
+
+    // 顺手把显卡情况问出来，别让用户猜「为什么不动」
+    var g = { ok: null, api: '', name: '' };
+    try {
+      var c1 = document.createElement('canvas');
+      var gl2 = c1.getContext('webgl2');
+      if (gl2) {
+        g.ok = true; g.api = 'WebGL2';
+        try {
+          var d = gl2.getExtension('WEBGL_debug_renderer_info');
+          g.name = d ? gl2.getParameter(d.UNMASKED_RENDERER_WEBGL) : '';
+        } catch (e2) { }
+      } else {
+        var c2 = document.createElement('canvas');
+        var gl1 = c2.getContext('webgl') || c2.getContext('experimental-webgl');
+        if (gl1) { g.ok = true; g.api = 'WebGL1'; } else { g.ok = false; g.api = '无'; }
+      }
+    } catch (e3) { g.ok = false; g.api = '探测失败'; }
+
+    var line = g.ok === true
+      ? '本机 WebGL 可用（' + g.api + (g.name ? ' · ' + g.name : '') + '），所以卡住的是场景初始化这一步。'
+      : '本机 WebGL 不可用（' + g.api + '）—— 序章的 3D 房间必须有它：Edge 里打开「设置 → 系统和性能 → 使用图形加速」再重启浏览器。';
+
+    var el = document.createElement('div');
+    el.id = 'booterr';
+    el.className = 'on';
+    el.innerHTML =
+      '<div class="be-inner"><b class="be-title">开场没有动起来</b>' +
+      '<p class="be-msg">脚本都加载完了，但开场分镜没有推进。</p>' +
+      '<p class="be-msg">' + line + '</p>' +
+      '<p class="be-hint">按 F12 打开控制台能看到具体报错；也可以先直接进入故事。</p>' +
+      '<div class="be-acts"><a class="be-btn primary" href="../index.html#1">进入游戏 →</a>' +
+      '<button class="be-btn" onclick="location.reload()" type="button">重新加载</button></div></div>';
+    document.body.appendChild(el);
+  } catch (e) { }
+}, 6500);
+</script>
+<script>
+/* 被主站嵌进 iframe 时，把站内跳转交给父页面处理，避免在 iframe 里套站 */
+(function(){
+  if (window.parent === window) return;
+  document.addEventListener('click', function(e){
+    var a = e.target.closest ? e.target.closest('a[href]') : null;
+    if (!a) return;
+    var href = a.getAttribute('href');
+    if (!href || href.charAt(0) === '#') return;
+    if (!/\.html/.test(href)) return;
+    e.preventDefault();
+    parent.postMessage({ type: 'scene-goto', href: href }, '*');
+  }, true);
+})();
+</script>
+</body>
+</html>
+
+
+

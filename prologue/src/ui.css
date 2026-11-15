@@ -1,0 +1,132 @@
+/* SCENE LAB — 两个页面共用的基础视觉。
+   深色玻璃 / 冷紫蓝强调色，和《球状闪电：粒子之间》阅读网页保持同一套气质。 */
+
+:root {
+  --bg: #07070b;
+  --bg-deep: #030305;
+  --panel: rgba(17, 18, 26, 0.82);
+  --panel-solid: #10111a;
+  --line: rgba(255, 255, 255, 0.09);
+  --line-strong: rgba(255, 255, 255, 0.18);
+  --ink: #e9eaf2;
+  --ink-dim: #9ba1b8;
+  --ink-faint: #646a80;
+  --accent: #7d8cff;
+  --accent-soft: rgba(125, 140, 255, 0.16);
+  --warm: #ffb066;
+  --danger: #ff7d7d;
+  --radius: 14px;
+  --font: "Inter", "Segoe UI", "Noto Sans SC", "Microsoft YaHei", system-ui, sans-serif;
+  --mono: "JetBrains Mono", "Cascadia Mono", "Consolas", ui-monospace, monospace;
+}
+
+* { box-sizing: border-box; }
+
+html, body {
+  margin: 0;
+  height: 100%;
+  background: var(--bg);
+  color: var(--ink);
+  font-family: var(--font);
+  -webkit-font-smoothing: antialiased;
+}
+
+body {
+  overflow: hidden;
+  background:
+    radial-gradient(1100px 700px at 82% -8%, rgba(125, 140, 255, 0.14), transparent 62%),
+    radial-gradient(900px 620px at 6% 104%, rgba(196, 92, 255, 0.1), transparent 60%),
+    var(--bg);
+}
+
+button, input, select, textarea { font: inherit; color: inherit; }
+
+button {
+  cursor: pointer;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.04);
+  color: var(--ink);
+  border-radius: 9px;
+  padding: 6px 11px;
+  transition: background 0.16s ease, border-color 0.16s ease, color 0.16s ease, transform 0.12s ease;
+}
+
+button:hover { background: rgba(255, 255, 255, 0.09); border-color: var(--line-strong); }
+button:active { transform: translateY(1px); }
+button:disabled { opacity: 0.4; cursor: not-allowed; }
+
+button.primary {
+  background: var(--accent);
+  border-color: transparent;
+  color: #0b0c14;
+  font-weight: 650;
+}
+button.primary:hover { background: #93a0ff; }
+
+button.ghost { background: transparent; }
+button.on {
+  background: var(--accent-soft);
+  border-color: rgba(125, 140, 255, 0.5);
+  color: #cfd5ff;
+}
+
+a { color: #b9c1ff; text-decoration: none; }
+a:hover { text-decoration: underline; }
+
+input[type="text"], input[type="number"], select, textarea {
+  width: 100%;
+  background: rgba(0, 0, 0, 0.34);
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  padding: 6px 8px;
+  outline: none;
+}
+input[type="number"] { font-family: var(--mono); font-size: 12px; }
+input:focus, select:focus, textarea:focus { border-color: rgba(125, 140, 255, 0.6); }
+input[type="file"] { display: none; }
+
+::-webkit-scrollbar { width: 9px; height: 9px; }
+::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.14); border-radius: 6px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.22); }
+::-webkit-scrollbar-track { background: transparent; }
+
+.toast-wrap {
+  position: fixed;
+  left: 50%;
+  bottom: 22px;
+  transform: translateX(-50%);
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  align-items: center;
+  z-index: 90;
+  pointer-events: none;
+}
+.toast {
+  max-width: min(560px, 88vw);
+  padding: 9px 15px;
+  border-radius: 999px;
+  background: rgba(11, 12, 18, 0.94);
+  border: 1px solid var(--line-strong);
+  color: var(--ink);
+  font-size: 13px;
+  box-shadow: 0 12px 34px rgba(0, 0, 0, 0.5);
+  animation: toast-in 0.22s ease;
+}
+.toast.err { border-color: rgba(255, 125, 125, 0.55); color: #ffd9d9; }
+.toast.ok { border-color: rgba(125, 140, 255, 0.5); }
+@keyframes toast-in { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+
+.kbd {
+  font-family: var(--mono);
+  font-size: 10.5px;
+  padding: 1px 5px;
+  border-radius: 5px;
+  border: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--ink-dim);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  * { animation-duration: 0.01ms !important; animation-iteration-count: 1 !important; transition-duration: 0.01ms !important; }
+}

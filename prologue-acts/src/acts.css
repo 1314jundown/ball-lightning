@@ -1,0 +1,41 @@
+﻿/* 序章 · 影子戏试装页
+   一块全屏画布，所有画面都在 canvas 里画；文字也画在画布上，
+   这样"胶片"的颗粒、抖动、遮幅能一起作用到字幕上。 */
+html, body {
+  margin: 0; padding: 0; height: 100%;
+  background: #000; overflow: hidden;
+  -webkit-user-select: none; user-select: none;
+  -webkit-tap-highlight-color: transparent;
+}
+canvas#acts-canvas {
+  display: block; width: 100vw; height: 100vh;
+  cursor: crosshair;
+}
+#hud {
+  position: fixed; top: 0; left: 0; right: 0;
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 14px 20px; pointer-events: none;
+  font: 12px/1 ui-monospace, Consolas, monospace;
+  letter-spacing: .08em; color: rgba(220,205,180,.45);
+}
+#hud .hud-mark { pointer-events: none; }
+#hud .hud-actions { display: flex; gap: 10px; pointer-events: auto; }
+#hud button {
+  font: inherit; color: rgba(230,215,190,.7); background: transparent;
+  border: 1px solid rgba(230,215,190,.22); border-radius: 999px;
+  padding: 6px 12px; cursor: pointer;
+}
+#hud button:hover { border-color: rgba(230,215,190,.5); color: rgba(245,235,215,.95); }
+/* 窄屏：HUD 缩小、按钮不换行、提示语不挡字幕 */
+@media (max-width: 720px) {
+  #hud { padding: 8px 10px; font-size: 10px; gap: 8px; flex-wrap: nowrap; }
+  #hud .hud-r { gap: 8px; }
+  #act-again { font-size: 13px; padding: 8px 14px; }
+}
+@media (max-height: 520px) {
+  #hud { padding: 6px 10px; font-size: 10px; }
+}
+
+/* 序章全程保留系统鼠标（之前某些屏幕看不到光标） */
+html, body, canvas, #hud, #hud *{cursor:default}
+button, a, [role="button"]{cursor:pointer}

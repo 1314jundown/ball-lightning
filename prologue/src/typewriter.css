@@ -1,0 +1,43 @@
+/* 打字机公共样式：只作用于 .tw-root 里的 .tw-ch / .tw-caret，
+   不影响 prologue.css 里 #chapter 那套 ::after 方块光标。 */
+
+.tw-root { position: relative; }
+.tw-root .tw-line { display: inline; }
+
+/* C 档：字逐字由糊到清、由下浮上来 */
+.tw-root.tw-polish .tw-ch {
+  display: inline-block;
+  opacity: 0;
+  filter: blur(0.7px);
+  transform: translateY(1.6px);
+  transition: opacity 240ms cubic-bezier(.22,.61,.36,1),
+              filter 300ms cubic-bezier(.22,.61,.36,1),
+              transform 240ms cubic-bezier(.22,.61,.36,1);
+}
+.tw-root.tw-polish .tw-ch.in { opacity: 1; filter: blur(0); transform: none; }
+.tw-root.tw-polish.tw-done { transition: transform 420ms ease-out; transform: translateY(-1px); }
+
+/* 光标：细竖线 + 一点辉光；打字时钉住不闪，停下 420ms 后才开始呼吸 */
+.tw-root .tw-caret {
+  display: inline-block;
+  width: 1px;
+  height: 1.02em;
+  vertical-align: -0.16em;
+  margin-left: 0.10em;
+  background: currentColor;
+  box-shadow: 0 0 6px currentColor, 0 0 12px rgba(125, 140, 255, 0.45);
+  opacity: 0.95;
+}
+.tw-root .tw-caret.busy { animation: none; }
+.tw-root .tw-caret.idle { animation: twCaretBlink 1.06s steps(1) infinite; }
+
+/* 没有开 C 档时保持原来那个方块光标（▌），老观感不变 */
+.tw-root:not(.tw-polish) .tw-caret {
+  width: 0.52em;
+  background: #7d8cff;
+  box-shadow: none;
+}
+@keyframes twCaretBlink {
+  0%, 55% { opacity: 0.95; }
+  56%, 100% { opacity: 0.08; }
+}
