@@ -523,7 +523,7 @@ const sx = k % 2 ? -1 : 1, sy = k < 2 ? 1 : -1;
 A.push('<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + (c[0] + sx * 9) + '" y2="' + c[1] + '" stroke="' + hl + '" stroke-width=".9" opacity=".4"/>' +
 '<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + c[0] + '" y2="' + (c[1] + sy * 9) + '" stroke="' + hl + '" stroke-width=".9" opacity=".4"/>');
 });
-const shot = '<img class="art-img" src="assets/covers/' + ('0' + (i + 1)).slice(-2) + '.webp" alt="" decoding="async" loading="lazy" onerror="this.remove()">';
+const shot = '<img class="art-img" src="assets/covers/' + ('0' + (i + 1)).slice(-2) + '.webp" alt="" decoding="async" onerror="this.remove()">';
 return shot + '<svg viewBox="-16 -22 292 384" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + A.join('') + '</svg>';
 }
 const chapItems = [];
@@ -7310,28 +7310,15 @@ requestAnimationFrame(loop);
 })();
 })();
 (function(){
-var g=document.getElementById('bootGate'); if(!g) return;
-var pct=document.getElementById('bootPct'), bar=document.getElementById('bootBar');
-var p=0, done=false;
-function draw(v){ p=v; if(pct) pct.textContent=String(Math.floor(v)); if(bar) bar.style.width=v+'%'; }
-var t=setInterval(function(){ if(done) return; if(p<86){ p+=Math.random()*7; draw(Math.min(86,p)); } },260);
-function finish(){
-if(done) return; done=true; clearInterval(t); draw(100);
-setTimeout(function(){ g.classList.add('bg-done'); setTimeout(function(){ g.remove(); },700); },260);
-}
+if(!window.__bootGateFinish) return;
 function check(){
 var toc=document.querySelector('#toc');
-if(!toc || !toc.children.length) return setTimeout(check,220);
+if(!toc || !toc.children.length) return setTimeout(check,200);
 var v=document.querySelector('#cover .cover-vid') || document.querySelector('.cover-vid');
-if(v && (v.readyState>=2 || v.error)) return finish();
-if(!v && document.querySelector('#toc') && document.querySelector('#toc').children.length) return finish();
-setTimeout(check,220);
+if(!v || v.readyState>=2 || v.error) return window.__bootGateFinish();
+setTimeout(check,200);
 }
-if(document.readyState==='complete') setTimeout(check,120);
-else window.addEventListener('load',function(){ setTimeout(check,120); });
-var slow=setTimeout(function(){ if(done) return; var hint=g.querySelector('.bg-hint'); if(hint) hint.textContent='装载有点慢 —— 点一下直接进去，缺的图会自己补上'; g.classList.add('bg-slow'); },4000);
-g.addEventListener('click',function(){ clearTimeout(slow); finish(); });
-setTimeout(finish,20000);   /* 兜底：无论如何 20 秒后放行 */
+check();
 })();
 addEventListener('message', function (e) {
 var t = e.data && e.data.type;

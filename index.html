@@ -4952,6 +4952,28 @@ opacity:.94;
     <div class="bg-hint">正在装载观测记录 · 球状闪电</div>
   </div>
 </div>
+<script>
+/* 闸门自己跑：进度条要是在等 app.js 解析，慢的时候会僵在 0%，看起来像坏了 */
+(function(){
+  var g=document.getElementById('bootGate'); if(!g) return;
+  var pct=document.getElementById('bootPct'), bar=document.getElementById('bootBar');
+  var p=0, done=false;
+  function draw(v){ p=v; if(pct) pct.textContent=String(Math.floor(v)); if(bar) bar.style.width=Math.min(100,v)+'%'; }
+  var t=setInterval(function(){ if(done) return; if(p<90){ p+=Math.max(.7,(90-p)*.07); draw(p); } },180);
+  window.__bootGateFinish=function(){
+    if(done) return; done=true; clearInterval(t); draw(100);
+    setTimeout(function(){ g.classList.add('bg-done'); setTimeout(function(){ if(g.parentNode) g.remove(); },700); },240);
+  };
+  setTimeout(function(){
+    if(done) return;
+    var h=g.querySelector('.bg-hint');
+    if(h) h.textContent='装载有点慢 —— 点一下直接进去，缺的图会自己补上';
+    g.classList.add('bg-slow');
+  },4000);
+  g.addEventListener('click', function(){ window.__bootGateFinish(); });
+  setTimeout(function(){ window.__bootGateFinish(); },22000);
+})();
+</script>
 
 <header class="masthead">
   <div class="brand"><span class="dot"></span>球状闪电<i>PARTICLES BETWEEN</i></div>
@@ -5440,7 +5462,7 @@ opacity:.94;
 <script defer src="js/scene3d.js?v=fe01bd43"></script>
 <script defer src="js/reality-shots.js?v=6793a80a"></script>
 <script defer src="js/lab-data.js?v=729600bc"></script>
-<script defer src="js/app.js?v=2108ef65"></script>
+<script defer src="js/app.js?v=2af14f66"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>
