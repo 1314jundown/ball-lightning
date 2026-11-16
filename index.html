@@ -4917,6 +4917,21 @@ html body #cover .cinfo dt{width:auto;flex:0 0 auto;font-size:8px;line-height:1.
 html body #cover .cinfo dd{flex:0 0 auto;font-size:9px;line-height:1.5;white-space:nowrap}
 html body #cover .ctag{left:14px;top:12px;font-size:8px;letter-spacing:.08em}
 }
+html body #chapStage .chap-bolt-stat{
+position:absolute;left:58px;bottom:296px;z-index:3;
+font-family:var(--mono);font-size:9px;letter-spacing:.22em;
+color:rgba(178,200,222,.55);opacity:0;transition:opacity .45s ease;pointer-events:none;
+}
+html body #chapStage .chap-bolt.is-loading .chap-bolt-stat,
+html body #chapStage .chap-bolt.is-error .chap-bolt-stat{opacity:1}
+html body #chapStage .chap-bolt.is-loading .chap-bolt-vid{opacity:.22}
+html body #chapStage .chap-bolt.is-error .chap-bolt-vid{display:none}
+html body #chapStage .chap-bolt.is-error .chap-bolt-scrim{opacity:.55}
+html body #bootGate.bg-slow{cursor:pointer}
+html body #bootGate.bg-slow .bg-hint{color:rgba(226,236,248,.9)}
+@media (max-width:960px){
+html body #chapStage .chap-bolt-stat{left:20px;bottom:210px;font-size:8px;letter-spacing:.16em}
+}
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
@@ -5417,7 +5432,7 @@ html body #cover .ctag{left:14px;top:12px;font-size:8px;letter-spacing:.08em}
 <script defer src="js/scene3d.js?v=fe01bd43"></script>
 <script defer src="js/reality-shots.js?v=6793a80a"></script>
 <script defer src="js/lab-data.js?v=729600bc"></script>
-<script defer src="js/app.js?v=3c79355b"></script>
+<script defer src="js/app.js?v=ecbb00a9"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>

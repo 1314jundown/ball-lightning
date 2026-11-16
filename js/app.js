@@ -676,10 +676,24 @@ const scrim = document.createElement('div');
 scrim.className = 'chap-bolt-scrim';
 const head = document.createElement('div');
 head.className = 'chap-bolt-head';
+const stat = document.createElement('div');
+stat.className = 'chap-bolt-stat';
+stat.textContent = '影像 · 装载中';
+wrap.classList.add('is-loading');
 wrap.appendChild(vid);
 wrap.appendChild(scrim);
 wrap.appendChild(head);
+wrap.appendChild(stat);
 stage.insertBefore(wrap, list);
+vid.addEventListener('loadeddata', function () {
+wrap.classList.remove('is-loading');
+wrap.classList.remove('is-error');
+});
+vid.addEventListener('error', function () {
+wrap.classList.remove('is-loading');
+wrap.classList.add('is-error');
+stat.textContent = '影像 · 未就绪（继续用静态电轨）';
+});
 let cur = P0, raf = 0;
 function paint(p){
 cur = p;
@@ -7305,13 +7319,18 @@ if(done) return; done=true; clearInterval(t); draw(100);
 setTimeout(function(){ g.classList.add('bg-done'); setTimeout(function(){ g.remove(); },700); },260);
 }
 function check(){
+var toc=document.querySelector('#toc');
+if(!toc || !toc.children.length) return setTimeout(check,220);
 var v=document.querySelector('#cover .cover-vid') || document.querySelector('.cover-vid');
-if(v && v.readyState>=2) return finish();
+if(v && (v.readyState>=2 || v.error)) return finish();
+if(!v && document.querySelector('#toc') && document.querySelector('#toc').children.length) return finish();
 setTimeout(check,220);
 }
 if(document.readyState==='complete') setTimeout(check,120);
 else window.addEventListener('load',function(){ setTimeout(check,120); });
-setTimeout(finish,12000);   /* 兜底：无论如何 12 秒后放行 */
+var slow=setTimeout(function(){ if(done) return; var hint=g.querySelector('.bg-hint'); if(hint) hint.textContent='装载有点慢 —— 点一下直接进去，缺的图会自己补上'; g.classList.add('bg-slow'); },4000);
+g.addEventListener('click',function(){ clearTimeout(slow); finish(); });
+setTimeout(finish,20000);   /* 兜底：无论如何 20 秒后放行 */
 })();
 addEventListener('message', function (e) {
 var t = e.data && e.data.type;
