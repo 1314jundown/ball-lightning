@@ -4941,6 +4941,10 @@ opacity:.94;
 .chap-item .art-img + svg{display:none}
 .chap-item .art-img::after{content:none}
 html body #chapStage .chap-item .art{background:#04060a}
+@media (max-width:600px){
+html body #chapStage[data-mode="detail"] .chap-hint,
+html body #chapStage[data-mode="detail"] .chap-coord{display:none}
+}
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
