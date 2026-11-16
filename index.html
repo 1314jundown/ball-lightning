@@ -301,7 +301,7 @@ opacity:.13;mix-blend-mode:overlay;
 }
 .chap-item .cover::after{
 content:"";position:absolute;inset:0;
-background:linear-gradient(180deg,rgba(0,0,0,.05) 40%,rgba(0,0,0,.62) 100%);
+background:linear-gradient(180deg,rgba(0,0,0,.26) 0%,rgba(0,0,0,.06) 24%,rgba(0,0,0,.30) 52%,rgba(0,0,0,.86) 100%);
 }
 .chap[data-mode="scatter"] .chap-item .cover{opacity:0;filter:blur(10px)}
 .chap[data-mode="scatter"] .chap-item{pointer-events:none}
@@ -4932,6 +4932,14 @@ html body #bootGate.bg-slow .bg-hint{color:rgba(226,236,248,.9)}
 @media (max-width:960px){
 html body #chapStage .chap-bolt-stat{left:20px;bottom:210px;font-size:8px;letter-spacing:.16em}
 }
+.chap-item .art-img{
+position:absolute;inset:0;width:100%;height:100%;
+object-fit:cover;object-position:50% 42%;
+filter:saturate(.78) contrast(1.04) brightness(.84);
+opacity:.94;
+}
+.chap-item .art-img + svg{display:none}
+.chap-item .art-img::after{content:none}
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
@@ -5432,7 +5440,7 @@ html body #chapStage .chap-bolt-stat{left:20px;bottom:210px;font-size:8px;letter
 <script defer src="js/scene3d.js?v=fe01bd43"></script>
 <script defer src="js/reality-shots.js?v=6793a80a"></script>
 <script defer src="js/lab-data.js?v=729600bc"></script>
-<script defer src="js/app.js?v=ecbb00a9"></script>
+<script defer src="js/app.js?v=2108ef65"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>

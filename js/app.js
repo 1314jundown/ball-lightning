@@ -523,7 +523,8 @@ const sx = k % 2 ? -1 : 1, sy = k < 2 ? 1 : -1;
 A.push('<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + (c[0] + sx * 9) + '" y2="' + c[1] + '" stroke="' + hl + '" stroke-width=".9" opacity=".4"/>' +
 '<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + c[0] + '" y2="' + (c[1] + sy * 9) + '" stroke="' + hl + '" stroke-width=".9" opacity=".4"/>');
 });
-return '<svg viewBox="-16 -22 292 384" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + A.join('') + '</svg>';
+const shot = '<img class="art-img" src="assets/covers/' + ('0' + (i + 1)).slice(-2) + '.webp" alt="" decoding="async" loading="lazy" onerror="this.remove()">';
+return shot + '<svg viewBox="-16 -22 292 384" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + A.join('') + '</svg>';
 }
 const chapItems = [];
 function projectVideo(vx, vy, w, h){
