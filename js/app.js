@@ -228,7 +228,7 @@ const src = hashBooted ? (location.hash || '') : (BOOT_HASH || location.hash || 
 hashBooted = true;
 const m = /^#(\d)(?:\/([A-Za-z0-9_-]+))?$/.exec(src);
 if (!m) return;
-const CH = { 4: 3, 5: 4 };
+const CH = { 3: 2, 4: 3, 5: 4 };
 const raw = +m[1];
 const i = CH[raw] !== undefined ? CH[raw] : Math.max(0, Math.min(screens.length - 1, raw));
 if (i !== cur) go(i);
@@ -262,14 +262,7 @@ document.body.classList.add('cover-reveal');
 screens.forEach((s, j) => s.classList.toggle('on', i === j));
 if (i === 3 && window.__stage3D) window.__stage3D.on();
 $$('#toc button').forEach((b, j) => b.setAttribute('aria-current', String(i === j)));
-const pageNow = $('#pageNow');
-if (pageNow) pageNow.textContent = '0' + i;
-if (window.__dockRail) window.__dockRail(i);
 document.body.dataset.screen = String(i);
-const prevBtn = $('#prev');
-const nextBtn = $('#next');
-if (prevBtn) prevBtn.disabled = i === 0;
-if (nextBtn) nextBtn.disabled = i === screens.length - 1;
 setStatus(NAV[i][0], NAV[i][1]);
 const noteEl = $('#screenNote');
 if (noteEl) noteEl.textContent = SCREEN_NOTE[i] || '';
@@ -298,8 +291,6 @@ cfg.hue = (202 + T.hue + 360) % 360;
 syncHash();
 }
 $$('[data-go]').forEach(b => b.addEventListener('click', () => go(+b.dataset.go)));
-if ($('#prev')) $('#prev').addEventListener('click', () => go(cur - 1));
-if ($('#next')) $('#next').addEventListener('click', () => go(cur + 1));
 addEventListener('keydown', e => {
 if (chapMode !== 'scatter' && document.getElementById('stages') && document.getElementById('stages').classList.contains('on')) return;
 if (e.key === 'ArrowRight' || e.key === 'PageDown') { go(cur + 1); e.preventDefault(); }
@@ -532,7 +523,7 @@ const sx = k % 2 ? -1 : 1, sy = k < 2 ? 1 : -1;
 A.push('<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + (c[0] + sx * 9) + '" y2="' + c[1] + '" stroke="' + hl + '" stroke-width=".9" opacity=".4"/>' +
 '<line x1="' + c[0] + '" y1="' + c[1] + '" x2="' + c[0] + '" y2="' + (c[1] + sy * 9) + '" stroke="' + hl + '" stroke-width=".9" opacity=".4"/>');
 });
-return '<svg viewBox="0 0 260 340" preserveAspectRatio="none" aria-hidden="true">' + A.join('') + '</svg>';
+return '<svg viewBox="-16 -22 292 384" preserveAspectRatio="xMidYMid slice" aria-hidden="true">' + A.join('') + '</svg>';
 }
 const chapItems = [];
 function projectVideo(vx, vy, w, h){
@@ -574,12 +565,20 @@ chapItems.forEach((el, i) => {
 let x = cx, y = cy, sc = 1, op = 1, z = 10, pe = 'auto', rot = 0;
 if (chapMode === 'scatter'){
 if (narrow){
-const pt = SCATTER_N[i];
-chapNodeX[i] = pt[0];
-x = w * pt[0]; y = h * pt[1];
-sc = .56; op = 1; z = 10;
-pe = 'none'; /* 热区交给 .txt（见 CSS） */
-rot = i % 2 ? 1.8 : -2.2;
+const rowY = .132 + i * .108;
+const ndX = w < 600 ? .62 : .74;
+chapNodeX[i] = .18 + i * .12;
+x = w * .075 + 130; y = h * rowY + 170;
+sc = 1; op = 1; z = 10; pe = 'none';
+const dx = (ndX - .075) * w, dy = 36;
+el.style.setProperty('--ndx', dx.toFixed(1) + 'px');
+el.style.setProperty('--ndy', dy.toFixed(1) + 'px');
+const ttlEl = el.querySelector('.ttl');
+const tw = Math.min(260, (ttlEl ? ttlEl.textContent.length : 4) * 26);
+el.style.setProperty('--ldx', (tw + 12).toFixed(1) + 'px');
+el.style.setProperty('--ldy', '36px');
+el.style.setProperty('--ldw', Math.max(16, dx - tw - 26).toFixed(1) + 'px');
+el.style.setProperty('--ldh', '1px');
 } else {
 const lb = CHAP_LABEL[i];
 const nd = projectVideo(CHAP_NODE_VID[i][0], CHAP_NODE_VID[i][1], w, h);
@@ -1060,70 +1059,6 @@ addEventListener('resize', layoutChaps);
 layoutChaps();
 requestAnimationFrame(layoutChaps);
 addEventListener('load', () => requestAnimationFrame(layoutChaps));
-let lensKey = 'ball';
-const wdEl = $('#wd');
-if (wdEl) {
-Object.keys(nodes).forEach(k => {
-const b = document.createElement('button');
-b.dataset.k = k;
-b.textContent = nodes[k].n;
-wdEl.appendChild(b);
-});
-function setWord(k){
-lensKey = k;
-const d = nodes[k];
-const hyp = HYP[k] || ['无对应候选', '现实中暂无对应机制。', '小说虚构'];
-const hasHyp = hyp[0] !== '无对应候选' && hyp[0] !== '无需假说';
-$('#wl').className = 'wl' + (hasHyp ? '' : ' two');
-const fictionBnd = d.bnd;
-wdEl.querySelectorAll('button').forEach(b => b.setAttribute('aria-current', String(b.dataset.k === k)));
-const TINT = {
-storm:'rgba(60,110,150,.38)', ball:'rgba(70,90,180,.38)', macro:'rgba(120,70,170,.34)',
-nucleus:'rgba(90,80,170,.32)', bubble:'rgba(50,120,130,.34)', quantum:'rgba(120,80,160,.32)',
-transition:'rgba(60,110,160,.30)', fusion:'rgba(150,60,90,.32)', observer:'rgba(70,90,160,.32)',
-rose:'rgba(140,80,140,.32)'
-};
-const hero = $('#wlHero');
-hero.style.setProperty('--tint', TINT[k] || 'rgba(70,90,160,.32)');
-const idx = Object.keys(nodes).indexOf(k);
-$('#wlIdx').textContent = 'CH.' + String(idx + 1).padStart(2, '0') + '  ·  CONCEPT';
-$('#wlName').textContent = d.n;
-$('#wlTags').innerHTML = '<span class="chip accent">' + d.sub + '</span>' +
-(d.bnd && d.bnd !== d.sub ? '<span class="chip">' + d.bnd + '</span>' : '');
-let art = '';
-try { art = SCENES[k] ? SCENES[k]() : ''; } catch (e) { art = ''; }
-$('#wlArt').innerHTML = art;
-let ficHtml = '<ul>';
-d.fic.split('；').forEach(x => { if (x.trim()) ficHtml += '<li>' + x.trim() + '</li>'; });
-ficHtml += '</ul>';
-if (d.q) ficHtml += '<div class="q"><b>原文</b>' + d.q + '</div>';
-$('#wl').innerHTML =
-'<div class="card wl-card">' +
-'<div class="k" style="color:#7fd4ff">现实科学 · REALITY</div>' +
-'<h3>' + d.n + '：现实中能说到哪里</h3>' +
-'<ul><li>' + d.sci + '</li><li>边界标签：<b>' + d.bnd + '</b></li></ul>' +
-'<p class="none" style="margin-top:auto">这一栏只写可核实的内容。</p>' +
-'</div>' +
-(hasHyp ?
-'<div class="card wl-card">' +
-'<div class="k" style="color:#ffbd7e">候选假说 · HYPOTHESIS</div>' +
-'<h3>' + hyp[0] + '</h3>' +
-'<ul><li>' + hyp[1] + '</li></ul>' +
-'<p class="none" style="margin-top:auto">假说解释力越强，越要问一句：证据在哪里。</p>' +
-'</div>' : '') +
-'<div class="card wl-card">' +
-'<div class="k" style="color:#ff9ec4">小说设定 · FICTION</div>' +
-'<h3>' + d.n + '：小说里它是什么</h3>' +
-ficHtml +
-'</div>';
-setStatus('报告归纳', fictionBnd);
-}
-wdEl.addEventListener('click', e => {
-const b = e.target.closest('[data-k]');
-if (b) setWord(b.dataset.k);
-});
-requestAnimationFrame(() => setWord('ball'));
-}
 (function bookmark(){
 const btn = document.getElementById('markBtn');
 const modal = document.getElementById('markModal');

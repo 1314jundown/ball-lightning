@@ -4372,6 +4372,49 @@ html body #chapStage[data-mode="scatter"] .chap-item .ld{display:block;position:
 left:var(--ldx);top:var(--ldy);width:var(--ldw);height:var(--ldh);
 background:rgba(186,214,246,.34);box-shadow:0 0 6px rgba(140,190,240,.22)}
 }
+html body #chapStage[data-mode="scatter"] .chap-item{width:360px;height:220px}
+html body #chapStage[data-mode="scatter"] .chap-item .txt{left:0;right:auto;top:0;bottom:auto;width:min(340px,30vw)}
+html body #chapStage[data-mode="scatter"] .chap-item .no{font-size:11.5px;letter-spacing:.24em;
+color:rgba(196,214,232,.72);margin-bottom:8px}
+html body #chapStage[data-mode="scatter"] .chap-item .ttl{font-size:42px;line-height:1.08;
+letter-spacing:-.02em;color:#f4f7fa}
+html body #chapStage[data-mode="scatter"] .chap-item .ent{display:block}
+html body #chapStage[data-mode="scatter"] .chap-item .no{display:flex;align-items:baseline;gap:11px;margin-bottom:10px}
+html body #chapStage[data-mode="scatter"] .chap-item .no b{margin-right:0}
+html body #chapStage[data-mode="scatter"] .chap-item .no b{font-family:var(--display);font-weight:700;
+font-size:40px;line-height:1;letter-spacing:-.01em;color:rgba(214,228,242,.9)}
+html body #chapStage[data-mode="scatter"] .chap-item .no i{font-style:normal;font-size:12.5px;
+letter-spacing:.2em;color:rgba(190,210,230,.66)}
+html body #chapStage[data-mode="scatter"] .chap-item .play{display:none}
+html body #chapStage[data-mode="scatter"] .chap-item .nd{display:block;position:absolute;
+left:var(--ndx);top:var(--ndy);width:16px;height:16px;margin:-8px 0 0 -8px;border-radius:50%;
+background:radial-gradient(circle,#fff 0%,#d6e9ff 28%,rgba(120,180,255,.62) 54%,rgba(90,150,230,0) 72%);
+box-shadow:0 0 13px 3px rgba(140,195,255,.5),0 0 32px 9px rgba(90,150,230,.26)}
+html body #chapStage[data-mode="scatter"] .chap-item.is-on .nd{
+box-shadow:0 0 18px 6px rgba(170,215,255,.72),0 0 52px 16px rgba(96,158,232,.4)}
+html body #chapStage[data-mode="scatter"] .chap-item .ld{display:block;position:absolute;
+left:var(--ldx);top:var(--ldy);width:var(--ldw);height:var(--ldh);
+background:rgba(186,214,246,.34);box-shadow:0 0 6px rgba(140,190,240,.22)}
+@media (max-width:960px){
+html body #chapStage .chap-bolt-vid{opacity:.62;filter:saturate(1.02) contrast(1.08) brightness(.95)}
+}
+@media (min-width:600px) and (max-width:960px){
+html body #chapStage[data-mode="scatter"] .chap-item .no b{font-size:34px}
+html body #chapStage[data-mode="scatter"] .chap-item .no i{font-size:11.5px}
+html body #chapStage[data-mode="scatter"] .chap-item .ttl{font-size:33px}
+html body #chapStage[data-mode="scatter"] .chap-item .nd{width:13px;height:13px;margin:-6.5px 0 0 -6.5px}
+}
+@media (max-width:960px){
+html body #chapStage[data-mode="scatter"] .chap-item{width:300px;height:140px}
+html body #chapStage[data-mode="scatter"] .chap-item .txt{width:min(66vw,300px)}
+html body #chapStage[data-mode="scatter"] .chap-item .no{gap:9px;margin-bottom:6px}
+html body #chapStage[data-mode="scatter"] .chap-item .no b{font-size:26px}
+html body #chapStage[data-mode="scatter"] .chap-item .no i{font-size:10px;letter-spacing:.16em}
+html body #chapStage[data-mode="scatter"] .chap-item .ttl{font-size:25px;line-height:1.12}
+html body #chapStage[data-mode="scatter"] .chap-item .ent{display:none}
+html body #chapStage[data-mode="scatter"] .chap-item .play{display:none}
+html body #chapStage[data-mode="scatter"] .chap-item .nd{width:11px;height:11px;margin:-5.5px 0 0 -5.5px}
+}
 html body #chapStage .chap-tel{
 position:absolute;inset:0;pointer-events:none;
 font-family:var(--mono);font-size:10px;letter-spacing:.2em;
@@ -4833,6 +4876,46 @@ animation:chapCrawl .55s ease-out;
 @media (prefers-reduced-motion:reduce){
 html body #chapStage[data-mode="scatter"] .chap-item.is-on .nd{animation:none}
 html body #chapStage[data-mode="scatter"] .chap-item:has(.txt:hover) .ld::after{display:none}
+}
+@media (max-width:600px){
+html body #chapStage .chap-bolt-vid{opacity:.45}
+html body #chapStage .chap-bolt::after{
+content:'';position:absolute;inset:0;pointer-events:none;
+background:linear-gradient(90deg,rgba(5,8,12,.78) 0%,rgba(5,8,12,.42) 48%,rgba(5,8,12,.06) 78%,rgba(5,8,12,0) 100%);
+}
+}
+@media (max-width:600px){
+html body .intro-prompt{
+flex-wrap:wrap;justify-content:center;row-gap:6px;
+max-width:min(320px,86vw);padding:10px 18px;border-radius:18px;text-align:center;
+}
+html body .intro-prompt .prompt-text{font-size:12px;letter-spacing:.08em;line-height:1.5}
+html body .colophon{height:auto;min-height:30px;padding:4px 10px 6px;gap:8px 12px;flex-wrap:wrap}
+html body .colophon .note,
+html body .colophon .ver{display:none}
+html body .colophon .tags{font-size:8px;gap:9px}
+html body .colophon .tags .chip{padding:0}
+html body .colophon #termRead{font-size:7px;gap:5px 9px;flex-wrap:wrap;line-height:1.4}
+html body .colophon .dock-rail{display:none}
+}
+@media (max-width:600px){
+body[data-screen="3"] #termRead{display:none}
+html body #concepts .tune{bottom:46px;left:10px}
+html body #concepts .stage-zoom{bottom:46px;left:10px}
+html body #concepts .tune-panel{width:min(240px,86vw)}
+}
+@media (max-width:600px){
+html body #cover .cinfo{
+right:12px;left:auto;top:12px;width:auto;max-width:62vw;
+display:block;font-size:9px;line-height:1.5;
+}
+html body #cover .cinfo > div{
+display:flex;flex-direction:column;align-items:flex-end;gap:0;
+padding:0 0 3px;margin:0 0 3px;white-space:nowrap;
+}
+html body #cover .cinfo dt{width:auto;flex:0 0 auto;font-size:8px;line-height:1.5;letter-spacing:.04em}
+html body #cover .cinfo dd{flex:0 0 auto;font-size:9px;line-height:1.5;white-space:nowrap}
+html body #cover .ctag{left:14px;top:12px;font-size:8px;letter-spacing:.08em}
 }
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
@@ -5334,7 +5417,7 @@ html body #chapStage[data-mode="scatter"] .chap-item:has(.txt:hover) .ld::after{
 <script defer src="js/scene3d.js?v=fe01bd43"></script>
 <script defer src="js/reality-shots.js?v=6793a80a"></script>
 <script defer src="js/lab-data.js?v=729600bc"></script>
-<script defer src="js/app.js?v=5334a6a5"></script>
+<script defer src="js/app.js?v=3c79355b"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>

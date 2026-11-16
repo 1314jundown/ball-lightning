@@ -650,7 +650,7 @@
     grp.add(canvasMesh);
 
     try {
-      new T.TextureLoader().load('samples/painting/tower.png', function (t) {
+      new T.TextureLoader().load('samples/painting/tower.webp', function (t) {
         if ('colorSpace' in t && T.SRGBColorSpace) t.colorSpace = T.SRGBColorSpace;
         t.anisotropy = 4;
         canvasMat.map = t;
@@ -2044,7 +2044,7 @@
       no: 'EVIDENCE 01', h: '倒扣的杯子', o: 0.06,
       t: '但现在，桌上的那个杯子是倒扣着的！',
       mode: 'compare',
-      a: 'samples/examine/cup-before.png', b: 'samples/examine/cup-after.png',
+      a: 'samples/examine/cup-before.webp', b: 'samples/examine/cup-after.webp',
       ta: '我走时 · 正着', tb: '现在 · 倒扣',
       hint: '拖动中间的竖线，对比同一只杯子的两种状态。'
     },
@@ -2052,7 +2052,7 @@
       no: 'EVIDENCE 03', h: '那幅画', o: 0.10,
       t: '只是，这座水塔是在我考上大学之后才建成的。',
       mode: 'compare',
-      a: 'samples/examine/painting-before.png', b: 'samples/examine/painting-after.png',
+      a: 'samples/examine/painting-before.webp', b: 'samples/examine/painting-after.webp',
       ta: '两年前 · 脚手架', tb: '现在 · 已建成',
       note: '关掉这一页之后，再按一次 E 可以把画拿走。',
       hint: '拖动竖线，看画里那座水塔的两个时期。'
@@ -2061,7 +2061,7 @@
       no: 'EVIDENCE 04', h: '池沿上的头发', o: 0.14,
       t: '池沿上留着一根半白的头发。',
       mode: 'compare',
-      a: 'samples/examine/hair-before.png', b: 'samples/examine/hair-after.png',
+      a: 'samples/examine/hair-before.webp', b: 'samples/examine/hair-after.webp',
       ta: '两年前 · 干净', tb: '现在 · 一根半白',
       hint: '拖动竖线：发根还是黑的，发梢已经白了。'
     },
@@ -2069,7 +2069,7 @@
       no: 'EVIDENCE 02', h: '桌面上的灰', o: 0.18,
       t: '桌上有一层薄薄的灰。可这屋子空了两年。',
       mode: 'erase',
-      a: 'samples/examine/dust-clean.png', b: 'samples/examine/dust-made.png',
+      a: 'samples/examine/dust-clean.webp', b: 'samples/examine/dust-made.webp',
       ta: '擦开的桌面', tb: '',
       hint: '按住鼠标划过桌面，把灰擦开——看看下面是什么。',
       note: '这层灰，太薄了。'
