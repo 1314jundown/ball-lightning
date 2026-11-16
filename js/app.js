@@ -658,7 +658,7 @@ const stage = document.getElementById('chapStage');
 const list = document.getElementById('chapList');
 if (!stage || !list) return;
 const P0 = .10, P1 = .93;   /* 第一击的落点 / 最后一击的落点，留边不贴屏 */
-const reduce = window.matchMedia && window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+const reduce = false;
 const wrap = document.createElement('div');
 wrap.className = 'chap-bolt';
 wrap.setAttribute('aria-hidden', 'true');
