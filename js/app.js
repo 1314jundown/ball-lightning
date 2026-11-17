@@ -1217,90 +1217,157 @@ g.fillStyle = g.createPattern(grainTile, 'repeat');
 g.fillRect(0, 0, W, H);
 g.restore();
 }
-const ROSE_VIEW = { tilt: 1.30, spin: 0.62 };
+const ROSE_VIEW = { spin: 0.62 };
 function roseArt(g, cx, cy, R, opt){
-const cloud = roseCloud();
 const o = opt || {};
 const spin = o.spin === undefined ? ROSE_VIEW.spin : o.spin;
-const tilt = o.tilt === undefined ? ROSE_VIEW.tilt : o.tilt;
 const RM = (typeof window !== 'undefined' && window.__roseM) ? window.__roseM : {};
 const gk = Math.max(0, Math.min(1, RM.gone || 0));
-const cs = Math.cos(spin), sn = Math.sin(spin);
-const ct = Math.cos(tilt), st = Math.sin(tilt);
-const K = R * 1.06;
-function dot(px, py, rr, col){
+const fade = 1 - gk * 0.8;
+const dot = (x, y, r, col) => { g.beginPath(); g.arc(x, y, r, 0, Math.PI * 2); g.fillStyle = col; g.fill(); };
+const mix = (a, b, k) => Math.round(a + (b - a) * k);
+const under = g.createRadialGradient(cx, cy, 0, cx, cy, R * 1.05);
+under.addColorStop(0, 'rgba(150,110,255,' + (0.22 * fade).toFixed(3) + ')');
+under.addColorStop(0.55, 'rgba(70,90,220,' + (0.10 * fade).toFixed(3) + ')');
+under.addColorStop(1, 'rgba(40,50,140,0)');
+g.fillStyle = under;
+g.fillRect(cx - R * 1.1, cy - R * 1.1, R * 2.2, R * 2.2);
+const PET = 12;
+g.save();
+g.globalAlpha = 0.94;
+const _petStart = true;
+for (let i = 0; i < PET; i++){
+if (i % 5 !== 0 || i > 10) continue;
+const jit = i * 12.9898 + spin * 7.77;
+const rnd = Math.abs(Math.sin(jit) * 43758.5453) % 1;
+const next = Math.abs(Math.sin(jit * 3.1) * 55123.7) % 1;
+const angB = spin + i * 2.39996 + (rnd - 0.5) * 0.16 + (next - 0.5) * 0.5;
+const rrB = R * (1.02 + 0.06 * next) * (1 - 0.02 * i);
+const wB = rrB * 0.58;
+g.save();
+g.translate(cx, cy);
+g.rotate(angB);
+g.shadowColor = 'rgba(3,5,14,.5)';
+g.shadowBlur = R * 0.05;
+const bg2 = g.createLinearGradient(0, 0, 0, -rrB);
+bg2.addColorStop(0, 'rgba(26,32,92,' + (0.44 * fade).toFixed(3) + ')');
+bg2.addColorStop(0.7, 'rgba(44,52,150,' + (0.34 * fade).toFixed(3) + ')');
+bg2.addColorStop(1, 'rgba(96,120,235,' + (0.24 * fade).toFixed(3) + ')');
 g.beginPath();
-g.arc(px, py, rr, 0, Math.PI * 2);
-g.fillStyle = col;
+g.moveTo(0, 0);
+g.bezierCurveTo(-wB * 1.10, -rrB * 0.22, -wB * 0.66, -rrB * 1.02, 0, -rrB);
+g.bezierCurveTo(wB * 0.66, -rrB * 1.02, wB * 1.10, -rrB * 0.22, 0, 0);
+g.closePath();
+g.fillStyle = bg2;
 g.fill();
+g.restore();
 }
-function proj(i){
+for (let i = 0; i < PET; i++){
+const t = i / (PET - 1);
+const jit = i * 12.9898 + spin * 7.77;
+const rnd = Math.abs(Math.sin(jit) * 43758.5453) % 1;
+const rnd2 = Math.abs(Math.sin(jit * 1.7) * 23421.63) % 1;
+const ang = spin + i * 2.39996 + (rnd - 0.5) * 0.16;
+const rr = R * (0.34 + 0.66 * (1 - Math.pow(t, 1.55))) * (0.96 + 0.08 * rnd2);
+const w = rr * (0.80 - 0.12 * t) * (0.92 + 0.16 * rnd);
+g.save();
+g.translate(cx, cy);
+g.rotate(ang);
+g.shadowColor = 'rgba(3,5,14,.65)';
+g.shadowBlur = R * 0.055;
+g.shadowOffsetY = R * 0.012;
+const grad = g.createLinearGradient(0, 0, 0, -rr);
+grad.addColorStop(0, 'rgba(' + mix(30, 120, t) + ',' + mix(38, 50, t) + ',' + mix(110, 170, t) + ',' +
+((0.62 + 0.20 * t) * fade).toFixed(3) + ')');
+grad.addColorStop(0.62, 'rgba(' + mix(56, 190, t) + ',' + mix(70, 90, t) + ',' + mix(190, 235, t) + ',' +
+((0.58 + 0.24 * t) * fade).toFixed(3) + ')');
+grad.addColorStop(1, 'rgba(' + mix(120, 255, t) + ',' + mix(150, 170, t) + ',' + mix(255, 225, t) + ',' +
+((0.42 + 0.26 * t) * fade).toFixed(3) + ')');
+g.beginPath();
+g.moveTo(0, 0);
+g.bezierCurveTo(-w * 1.02, -rr * 0.26, -w * 0.60, -rr * 0.96, 0, -rr);
+g.bezierCurveTo(w * 0.60, -rr * 0.96, w * 1.02, -rr * 0.26, 0, 0);
+g.closePath();
+g.fillStyle = grad;
+g.fill();
+g.shadowColor = 'transparent';
+g.shadowBlur = 0;
+g.shadowOffsetY = 0;
+g.strokeStyle = 'rgba(' + mix(170, 255, t) + ',' + mix(200, 190, t) + ',255,' + ((0.10 + 0.14 * t) * fade).toFixed(3) + ')';
+g.lineWidth = 1.2;
+g.beginPath();
+g.moveTo(0, -rr * 0.06);
+g.quadraticCurveTo(w * 0.10, -rr * 0.6, 0, -rr * 0.94);
+g.stroke();
+g.globalCompositeOperation = 'lighter';
+const N = 34;
+for (let k = 0; k <= N; k++){
+const u = k / N;
+const a2 = Math.PI * u;
+const px = Math.cos(a2) * w * (1.02 - 0.42 * Math.sin(a2));
+const py = -rr * Math.sin(a2 * 0.88);
+dot(px, py, 0.8 + Math.random() * 1.1,
+'hsla(' + Math.round(205 + 70 * t + Math.random() * 16) + ',95%,' +
+Math.round(70 + 14 * Math.random()) + '%,' + ((0.24 + 0.22 * t) * fade).toFixed(3) + ')');
+}
+g.globalCompositeOperation = 'source-over';
+g.restore();
+}
+if (_petStart) { g.restore(); }
+{
+const cloud = roseCloud();
+const cs = Math.cos(spin * 0.3), sn = Math.sin(spin * 0.3);
+const tilt = 1.26, ct = Math.cos(tilt), st = Math.sin(tilt);
+g.save();
+g.globalCompositeOperation = 'lighter';
+g.shadowBlur = R * 0.03;
+g.shadowColor = 'rgba(130,160,255,.35)';
+for (let i = 0; i < cloud.n; i++){
 const x0 = cloud.xs[i], y0 = cloud.ys[i], z0 = cloud.zs[i];
 const x1 = x0 * cs + z0 * sn;
 const z1 = -x0 * sn + z0 * cs;
 const y2 = y0 * ct - z1 * st;
 const d2 = y0 * st + z1 * ct;
 const persp = 1 / (1.58 - d2 * 0.44);
-const sc = 1 + gk * 1.5;
-return {
-x: cx + x1 * K * persp * sc + (Math.random() - 0.5) * gk * R * 0.8,
-y: cy + y2 * K * persp * 0.99 * sc + (Math.random() - 0.5) * gk * R * 0.8,
-depth: (d2 + 1) / 2,
-rad: Math.hypot(x1, y2)
-};
+const depth = (d2 + 1) / 2;
+const rad = Math.hypot(x1, y2);
+if (rad > 1.02) continue;                    /* 只留花盘，丢掉外圈叶片 */
+const warm = Math.max(0, 1 - rad / 0.55) * (0.35 + 0.65 * depth);
+for (let k = 0; k < 1; k++){
+const jx = (Math.random() - 0.5) * 0.02, jy = (Math.random() - 0.5) * 0.02;
+const px = cx + (x1 + jx) * R * 1.24 * persp;
+const py = cy + (y2 + jy) * R * 1.24 * persp * 0.99;
+dot(px, py, 0.55 + Math.random() * 1.05 + 0.5 * depth,
+'hsla(' + Math.round(208 + 34 * (1 - depth) + 96 * warm) + ',92%,' +
+Math.round(58 + 24 * depth + 8 * warm) + '%,' +
+((0.03 + 0.10 * depth) * (0.8 + 0.5 * warm) * fade).toFixed(3) + ')');
 }
-g.save();
-g.globalCompositeOperation = 'lighter';
-g.shadowBlur = R * 0.12;
-g.shadowColor = 'rgba(120,152,255,.55)';
-for (let i = 0; i < cloud.n; i += 2){
-const q = proj(i);
-const warm = Math.max(0, 1 - q.rad / 0.52) * (0.30 + 0.70 * q.depth);
-dot(q.x, q.y, (1.5 + 1.9 * q.depth) * (1 + gk * 0.6),
-'hsla(' + Math.round(206 + 26 * (1 - q.depth) + 88 * warm) + ',88%,' +
-Math.round(46 + 18 * q.depth) + '%,' +
-((0.05 + 0.15 * q.depth) * (1 - gk * 0.7)).toFixed(3) + ')');
-}
-g.shadowBlur = 0;
-for (let i = 0; i < cloud.n; i++){
-const q = proj(i);
-const warm = Math.max(0, 1 - q.rad / 0.48) * (0.30 + 0.70 * q.depth);
-const edge = Math.max(0, Math.min(1, (q.rad - 0.55) / 0.35));
-const hue = 212 + 30 * (1 - q.depth) + 18 * edge + 92 * warm;
-const rim = 1 - 0.5 * edge;
-const alpha = (0.10 + 0.34 * q.depth) * (1 - gk * 0.72) * (0.85 + 0.45 * warm) * rim;
-dot(q.x, q.y, (0.55 + 1.05 * q.depth) * (1 + gk * 0.5),
-'hsla(' + Math.round(hue) + ',' + Math.round(86 + 8 * warm) + '%,' +
-Math.round(56 + 20 * q.depth + 8 * warm) + '%,' + alpha.toFixed(3) + ')');
 }
 g.restore();
-const gapFill = g.createRadialGradient(cx, cy, R * 0.10, cx, cy, R * 0.98);
-gapFill.addColorStop(0, 'rgba(150,120,255,' + (0.10 * (1 - gk * 0.6)).toFixed(3) + ')');
-gapFill.addColorStop(0.55, 'rgba(96,110,225,' + (0.07 * (1 - gk * 0.6)).toFixed(3) + ')');
-gapFill.addColorStop(1, 'rgba(60,80,180,0)');
-g.save();
-g.globalCompositeOperation = 'lighter';
-g.fillStyle = gapFill;
-g.fillRect(cx - R, cy - R, R * 2, R * 2);
-g.restore();
-const core = g.createRadialGradient(cx, cy, 0, cx, cy, R * 0.42);
-core.addColorStop(0, 'rgba(255,196,232,' + (0.16 * (1 - gk * 0.6)).toFixed(3) + ')');
-core.addColorStop(0.55, 'rgba(214,150,255,' + (0.07 * (1 - gk * 0.6)).toFixed(3) + ')');
-core.addColorStop(1, 'rgba(140,140,255,0)');
+}
+const core = g.createRadialGradient(cx, cy, 0, cx, cy, R * 0.26);
+core.addColorStop(0, 'rgba(255,198,236,' + (0.55 * fade).toFixed(3) + ')');
+core.addColorStop(0.4, 'rgba(232,140,255,' + (0.26 * fade).toFixed(3) + ')');
+core.addColorStop(1, 'rgba(160,120,255,0)');
 g.fillStyle = core;
-g.fillRect(cx - R, cy - R, R * 2, R * 2);
+g.fillRect(cx - R * 0.35, cy - R * 0.35, R * 0.7, R * 0.7);
 g.save();
 g.globalCompositeOperation = 'lighter';
-g.shadowBlur = R * 0.05;
-g.shadowColor = 'rgba(255,170,235,.7)';
 for (let i = 0; i < 300; i++){
 const t = i / 300;
-const ang = spin * 2.2 + t * Math.PI * 7.4;
-const r = R * (0.02 + 0.30 * t * (1 - 0.35 * t));
-dot(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.96, 0.5 + Math.random() * 1.1,
-'hsla(' + (300 + Math.round(Math.random() * 40)) + ',92%,' + (68 + Math.round(Math.random() * 14)) +
-'%,' + ((0.06 + 0.14 * (1 - t)) * (1 - gk * 0.7)).toFixed(3) + ')');
-if (i === 299) g.shadowBlur = 0;
+const ang2 = spin * 2.1 + t * Math.PI * 9.4;
+const r = R * (0.012 + 0.19 * t);
+dot(cx + Math.cos(ang2) * r, cy + Math.sin(ang2) * r * 0.96, 0.5 + Math.random() * 0.9,
+'hsla(' + (308 + Math.round(Math.random() * 26)) + ',94%,' + (74 + Math.round(Math.random() * 12)) +
+'%,' + ((0.12 + 0.18 * (1 - t)) * fade).toFixed(3) + ')');
+}
+for (let i = 0; i < 260; i++){
+const ang2 = Math.random() * Math.PI * 2;
+const rad = R * (0.12 + 0.86 * Math.pow(Math.random(), 0.55));
+const inner = 1 - rad / R;
+dot(cx + Math.cos(ang2) * rad, cy + Math.sin(ang2) * rad * 0.97, 0.6 + Math.random() * 1.3,
+'hsla(' + Math.round(212 + 80 * inner + Math.random() * 16) + ',92%,' +
+Math.round(64 + 20 * inner) + '%,' + ((0.05 + 0.14 * inner) * fade).toFixed(3) + ')');
 }
 g.restore();
 }
