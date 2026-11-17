@@ -209,9 +209,9 @@
 .card .num { transition: transform .25s ease, color .25s ease, text-shadow .25s ease; }
 .card:hover .num { transform: scale(1.14); text-shadow: 0 0 14px var(--edge, #7fb0ff); }
 
-/* 手势摇杆：左边的圆盘就是「手在画面里的位置」，捏合时外圈亮起来 */
-#handBox{position:fixed;left:16px;top:50%;transform:translateY(-50%);z-index:6;
-  display:flex;flex-direction:column;align-items:center;gap:8px;
+/* 手势摇杆：右下角、陈博士台词卡上面；预览放大了，站远一点也看得清手在哪 */
+#handBox{position:fixed;right:16px;bottom:168px;z-index:6;
+  display:flex;flex-direction:column;align-items:flex-end;gap:8px;
   font:10px/1.5 ui-monospace,Consolas,monospace;letter-spacing:.08em;color:#8fa8c8;pointer-events:none}
 #handBox>*{pointer-events:auto}
 #handPad{position:relative;width:92px;height:92px;border-radius:50%;
@@ -237,10 +237,10 @@
 #handBox[data-state="denied"] #handBtn{border-color:rgba(255,110,110,.45);color:#ffb4b4}
 #handBox[data-state="denied"] #handBtn i{background:#ff6b6b}
 @keyframes handPulse{50%{opacity:.3}}
-#handCam{width:160px;height:120px;object-fit:cover;border-radius:8px;border:1px solid rgba(120,160,220,.26);
+#handCam{width:208px;height:156px;object-fit:cover;border-radius:10px;border:1px solid rgba(120,160,220,.26);
   transform:scaleX(-1);opacity:.72;display:none;pointer-events:none;box-shadow:0 10px 26px -16px rgba(0,0,0,.8)}
 /* 小屏常驻：没开摄像头时也留一个虚线占位框，否则用户根本不知道这里会有预览 */
-#handCamWrap{position:relative;display:block;width:160px;height:120px;border-radius:8px;cursor:pointer;line-height:0;
+#handCamWrap{position:relative;display:block;width:208px;height:156px;border-radius:10px;cursor:pointer;line-height:0;
   border:1px dashed rgba(120,160,220,.30);background:radial-gradient(120% 120% at 50% 40%,rgba(14,22,38,.92),rgba(6,10,18,.96));overflow:hidden}
 #handBox[data-state="live"] #handCamWrap,#handBox[data-state="loading"] #handCamWrap{border-style:solid;border-color:rgba(120,160,220,.45)}
 .cam-ph{position:absolute;inset:0;display:grid;place-items:center;text-align:center;line-height:1.7;
@@ -250,14 +250,14 @@
 #handBox[data-state="denied"] #handCamWrap{border-color:rgba(255,120,120,.35)}
 #handCamWrap::after{content:'';position:absolute;inset:0;border-radius:8px;pointer-events:none;
   box-shadow:inset 0 0 0 1px rgba(140,190,255,.18);opacity:.9}
-#handBox.big #handCamWrap{width:320px;height:240px}
+#handBox.big #handCamWrap{width:416px;height:312px}
 #handBox[data-state="live"] #handCam,#handBox[data-state="loading"] #handCam{display:block}
-#handBox.big #handCam{width:320px;height:240px;opacity:.86}
+#handBox.big #handCam{width:416px;height:312px;opacity:.86}
 /* 骨架层：跟视频同尺寸、同样镜像，直接画 21 个关键点 */
-#handSkel{position:absolute;left:0;top:0;width:160px;height:120px;display:none;
-  transform:scaleX(-1);pointer-events:none;border-radius:8px}
+#handSkel{position:absolute;left:0;top:0;width:208px;height:156px;display:none;
+  transform:scaleX(-1);pointer-events:none;border-radius:10px}
 #handBox[data-state="live"] #handSkel,#handBox[data-state="loading"] #handSkel{display:block}
-#handBox.big #handSkel{width:320px;height:240px}
+#handBox.big #handSkel{width:416px;height:312px}
 #handTag{position:absolute;left:6px;top:6px;display:none;font:9px/1.5 ui-monospace,Consolas,monospace;
   letter-spacing:.14em;color:#9fe9ff;background:rgba(6,14,24,.6);border:1px solid rgba(120,200,255,.32);
   border-radius:4px;padding:1px 5px;pointer-events:none;white-space:nowrap}
@@ -266,9 +266,20 @@
   box-shadow:0 0 0 2px rgba(10,16,26,.55);transition:background .2s ease,box-shadow .2s ease}
 #handBox[data-present="1"] #handLed{background:#6df0b0;box-shadow:0 0 10px rgba(109,240,176,.9)}
 #handBox[data-state="live"][data-present="0"] #handLed{background:#ffb46b;box-shadow:0 0 8px rgba(255,180,107,.7)}
-#handMsg{max-width:170px;text-align:center;font-size:10px;color:#7d94b4;line-height:1.45}
+#handMsg{max-width:208px;text-align:right;font-size:10px;color:#7d94b4;line-height:1.45}
 #handBox[data-state="denied"] #handMsg{color:#ff9d9d}
-@media (max-height:760px){#handPad{width:74px;height:74px}#handCam,#handSkel,#handCamWrap{width:120px;height:90px}#handBox.big #handCam,#handBox.big #handSkel,#handBox.big #handCamWrap{width:240px;height:180px}}
+/* 手势教程：不写清楚没人知道该做什么动作 */
+#handHelp{width:208px;display:grid;gap:5px;padding:10px 12px;border-radius:10px;
+  border:1px solid rgba(120,160,220,.22);background:rgba(8,14,24,.74);
+  font:10px/1.65 ui-monospace,Consolas,monospace;letter-spacing:.04em;color:#8fa8c8}
+#handHelp>div{display:flex;align-items:flex-start;gap:7px}
+#handHelp>div>span:last-child{flex:1;min-width:0;line-height:1.6}
+#handHelp .k{flex:none;min-width:26px;padding:0 5px;border-radius:4px;text-align:center;
+  background:rgba(120,170,230,.16);color:#cfe6ff}
+#handHelp b{color:#e6f2ff;font-weight:500}
+#handHelp em{font-style:normal;color:#7d94b4}
+#handBox[data-state="off"] #handHelp{opacity:.72}
+@media (max-height:760px){#handPad{width:74px;height:74px}#handCam,#handSkel,#handCamWrap{width:150px;height:112px}#handBox.big #handCam,#handBox.big #handSkel,#handBox.big #handCamWrap{width:300px;height:225px}#handHelp{display:none}}
 </style>
 </head>
 <body>
@@ -322,6 +333,12 @@
     <span class="cam-ph" id="handPh">摄像头未开<b>点这里开始</b></span>
   </div>
   <span id="handMsg">点「手势」用摄像头开摇杆</span>
+  <div id="handHelp">
+    <div><span class="k">← →</span><span>手往左右挪，人就左右走</span></div>
+    <div><span class="k">↑ ↓</span><span>手往上下挪，人就前后走</span></div>
+    <div><span class="k">捏合</span><span>拇指食指捏一下<b>放电</b>，捏住不放连发</span></div>
+    <div><span class="k">C</span><span>走位不跟手，按 C 按你的手重校</span></div>
+  </div>
 </div>
 
 <div id="cards"><div id="cardBox">
@@ -366,7 +383,7 @@
   if (!b && !q) { document.documentElement.classList.add('gated'); return; }
   if (q) { try { localStorage.setItem('bl.branch', q); } catch (e) {} }
   var s = document.createElement('script');
-  s.src = 'src/arena.js?v=105';
+  s.src = 'src/arena.js?v=106';
   document.body.appendChild(s);
 })();
 </script>

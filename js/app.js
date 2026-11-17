@@ -1651,6 +1651,18 @@ putInCombo(k);
 if (innerWidth <= 1000 && combo.a && combo.b) $('#concepts').classList.remove('drawer-open');
 });
 $('#drawerTab').addEventListener('click', () => $('#concepts').classList.toggle('drawer-open'));
+(function compactConceptPanel(){
+const def = document.querySelector('#concepts .cg-def');
+const more = $('#nMore');
+if (!def || !more) return;
+def.classList.add('compact');
+more.addEventListener('click', () => {
+const collapse = !def.classList.contains('compact');
+def.classList.toggle('compact', collapse);
+more.setAttribute('aria-expanded', String(!collapse));
+more.textContent = collapse ? '展开完整资料 ↓' : '收起资料 ↑';
+});
+})();
 $('#zIn').addEventListener('click', () => setZoom(zScale + .2));
 $('#zOut').addEventListener('click', () => setZoom(zScale - .2));
 $('#zReset').addEventListener('click', () => setZoom(1));
@@ -3300,7 +3312,7 @@ if (swap){ glitch(folderEl); glitch(badgeEl); badgeEl.classList.add('flip'); }
 const btn = folderEl.querySelector('[data-act="expand"]'); if (btn) btn.focus({ preventScroll: true });
 }
 if (window.__bust) window.__bust.open(id);
-hot = null; paint();
+hot = id; paint();
 }
 function expand(){
 if (!S.pid) return;
@@ -4113,6 +4125,19 @@ $('#roseCaption').textContent = hidden
 : (lightning ? '模型的轮廓被采样成粒子，沿同一条光路重新聚合。' : '它更像记忆的回声，而不是实验室里的对象。');
 setStatus('原文线索', '文学象征');
 });
+(function roseEnding(){
+const fig = document.getElementById('roseFigure');
+if (!fig) return;
+const sync = el => {
+if (el && el.id !== 'roseGaze') return;
+const g = document.getElementById('roseGaze');
+const st = g ? g.dataset.state : '';
+fig.classList.toggle('ended', st === 'dispersed');
+};
+sync(null);
+new MutationObserver(muts => { for (const m of muts) sync(m.target); })
+.observe(fig.parentNode || document.body, { attributes: true, attributeFilter: ['data-state'], subtree: true });
+})();
 const roseSeenBtn = $('#roseChoice button[data-rose="seen"]');
 if (roseSeenBtn) roseSeenBtn.setAttribute('aria-current', 'true');
 (function crtScreen(){

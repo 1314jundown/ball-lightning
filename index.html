@@ -541,6 +541,8 @@ z-index:12;
 #concepts .refs-tab{top:calc(50% + 54px)}
 .drawer-body{height:100%;overflow:auto;padding:26px 22px 30px;scrollbar-width:none}
 .drawer-body::-webkit-scrollbar{display:none}
+.drawer-body::after{content:"";position:sticky;bottom:0;display:block;height:46px;margin-top:-46px;pointer-events:none;
+background:linear-gradient(180deg,rgba(4,6,12,0),rgba(4,6,12,.92) 70%,rgba(4,6,12,.98))}
 .drawer-body h2{font-size:22px;line-height:1.2}
 .cg-list{list-style:none;margin:16px 0 0;padding:0;display:grid;gap:6px}
 .cg-list button{
@@ -559,6 +561,11 @@ box-shadow:0 0 0 1px rgba(145,168,190,.22);
 .cg-def p{font-size:12.5px;line-height:1.8;color:var(--text2);margin:9px 0 0}
 .cg-def .kv{margin-top:11px;font-size:11.5px;color:var(--text2);line-height:1.65}
 .cg-def .kv b{display:block;font-family:var(--mono);font-size:8.5px;letter-spacing:.2em;color:var(--muted);font-weight:400;margin-bottom:3px}
+.cg-def .cg-more{display:block;width:100%;margin:13px 0 2px;padding:8px 11px;border-radius:9px;cursor:pointer;
+border:1px dashed rgba(158,183,207,.34);background:none;color:#cfe2ea;
+font-family:var(--mono);font-size:9px;letter-spacing:.18em;transition:.18s}
+.cg-def .cg-more:hover{border-color:rgba(196,224,253,.62);background:rgba(145,168,190,.09);color:#fff}
+.cg-def.compact #nChainBox,.cg-def.compact #nRefsBox{display:none}
 @keyframes fxSpin{to{transform:rotate(360deg)}}
 @keyframes fxBreathe{0%,100%{opacity:.42}50%{opacity:1}}
 @keyframes fxDash{to{stroke-dashoffset:-48}}
@@ -1275,6 +1282,11 @@ opacity:0;visibility:hidden;pointer-events:none;clip-path:inset(49.6% 0 49.6% 0)
 transition:clip-path .55s cubic-bezier(.7,0,.2,1),opacity .2s,visibility 0s .55s}
 .term[data-phase="dossier"] .dos{opacity:1;visibility:visible;pointer-events:auto;clip-path:inset(0 0 0 0);
 transition:clip-path .62s cubic-bezier(.7,0,.2,1) .05s,opacity .12s,visibility 0s}
+.term[data-phase="dossier"] .holo-veil{background:radial-gradient(76% 96% at 62% 50%,rgba(4,6,14,.30),rgba(2,3,8,.62));
+backdrop-filter:blur(1.5px);-webkit-backdrop-filter:blur(1.5px)}
+@media(min-width:1400px){
+.term[data-phase="dossier"] .dos{left:auto;right:40px;transform:translateY(-50%);width:min(880px,calc(100% - 420px))}
+}
 .dos::after{content:"";position:absolute;inset:0;pointer-events:none;
 background:repeating-linear-gradient(180deg,rgba(202,232,261,.03) 0 1px,transparent 1px 4px)}
 .dos.glitch .dos-body{animation:dosGlitch .3s steps(2) 1}
@@ -1437,6 +1449,17 @@ filter:blur(46px);
 .rose-figure[data-state="hidden"] .rose-rings::after{border-style:dashed}
 .rose-figure[data-state="hidden"] .rose-core{opacity:1;color:rgba(194,223,252,.05);-webkit-text-stroke:1.2px rgba(205,234,264,1);text-shadow:0 0 18px rgba(162,187,212,.55);letter-spacing:.24em}
 .rose-caption{position:absolute;bottom:-4px;left:0;right:0;text-align:center;font-size:11px;line-height:1.8;color:var(--muted);margin:0}
+.rose-end{position:absolute;inset:0;display:grid;place-content:center;justify-items:center;gap:15px;
+opacity:0;transition:opacity 1.15s ease;pointer-events:none;text-align:center}
+.rose-end i{width:7px;height:7px;border-radius:50%;background:#dbe9ff;
+box-shadow:0 0 18px 5px rgba(150,190,255,.5),0 0 56px 18px rgba(120,160,255,.18);
+animation:roseEndPulse 3.6s ease-in-out infinite}
+.rose-end p{margin:0;font-size:13px;letter-spacing:.1em;color:rgba(226,238,250,.84)}
+.rose-end span{font-family:var(--mono);font-size:8.5px;letter-spacing:.26em;color:rgba(161,186,210,.5)}
+@keyframes roseEndPulse{0%,100%{opacity:.5;transform:scale(.88)}50%{opacity:1;transform:scale(1.16)}}
+.rose-figure.ended .rose-end{opacity:1}
+.rose-figure.ended .rose-caption{opacity:0;transition:opacity .6s}
+@media(prefers-reduced-motion:reduce){.rose-end i{animation:none}}
 .colophon{
 position:relative;z-index:2;display:flex;align-items:center;justify-content:space-between;gap:16px;
 padding:12px clamp(16px,3.4vw,48px);border-top:1px solid var(--line2);
@@ -5434,6 +5457,7 @@ filter:saturate(1.05) contrast(1.2) brightness(1.5);
         <p class="cg-lab">本屏是试验场：放动画、关系链与参数。现实中是什么、出处在哪，都写在下方面板里。</p>
         <div class="kv"><b>关系</b><span id="nRel"></span></div>
         <div class="kv"><b>边界</b><span id="nBnd"></span></div>
+        <button class="cg-more" id="nMore" type="button" aria-expanded="false">展开完整资料 ↓</button>
         <div class="cg-chain" id="nChainBox">
           <b>关系链</b>
           <p class="flow" id="nFlow"></p>
@@ -5586,6 +5610,7 @@ filter:saturate(1.05) contrast(1.2) brightness(1.5);
       <div class="rose-rings" id="ring"></div>
       <div class="rose-core" id="roseCore">不可见</div>
       <p class="rose-caption" id="roseCaption">它更像记忆的回声，而不是实验室里的对象。</p>
+      <div class="rose-end" id="roseEnd" aria-hidden="true"><i></i><p>看过，就不在了。</p><span>OBSERVED · 不可复现</span></div>
     </div>
   </div>
 </section>
@@ -5626,7 +5651,7 @@ filter:saturate(1.05) contrast(1.2) brightness(1.5);
 <script defer src="js/scene3d.js?v=fe01bd43"></script>
 <script defer src="js/reality-shots.js?v=6793a80a"></script>
 <script defer src="js/lab-data.js?v=729600bc"></script>
-<script defer src="js/app.js?v=46b0f684"></script>
+<script defer src="js/app.js?v=8d42070c"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>

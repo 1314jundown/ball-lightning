@@ -1858,7 +1858,7 @@ function offerCards() {
     video: null, stream: null, worker: null, ready: false,
     lastFrame: 0, fpsAcc: 0, fpsN: 0, hz: 0, err: '', uiT: 0,
     lm: null, lmS: null, skelT: 0, ctx: null,
-    cal: { cx: 0.5, cy: 0.5, n: 0, done: false },
+    cal: { cx: 0.5, cy: 0.5, n: 99, done: true },
     el: {}
   };
   /* 校准：每个人坐的位置、手举的高低都不一样，掌心常驻点很少正好在画面正中。
@@ -1972,8 +1972,11 @@ function offerCards() {
       }
       return;
     }
-    HAND.tu = Math.max(-1, Math.min(1, (cal.cx - palm.x) / 0.36));
-    HAND.tv = Math.max(-1, Math.min(1, (palm.y - cal.cy) / 0.28));
+    /* 默认就以画面中心为中立位：手不用先「对准」，往哪边推就往哪边走。
+       如果手习惯停在很低/很高的位置，按 C 才按你的手重采一次。
+       行程给得比早期版本松：竖轴 0.24（原来 0.28 太钝，手压到底才刚满杆） */
+    HAND.tu = Math.max(-1, Math.min(1, (cal.cx - palm.x) / 0.34));
+    HAND.tv = Math.max(-1, Math.min(1, (palm.y - cal.cy) / 0.24));
   }
 
   /* ---------- 手指骨架叠在摄像头小屏上 ----------
@@ -2151,7 +2154,7 @@ function offerCards() {
     }
 
     /* 死区 + 60ms 一阶低通：自然悬停的抖动不会变成走位，也不追加那种 300ms 的串联滞后 */
-    var DZ = (HAND.state === 'fallback') ? 0.22 : 0.10;
+    var DZ = (HAND.state === 'fallback') ? 0.18 : 0.06;
     var tu = HAND.tu, tv = HAND.tv;
     var m0 = Math.hypot(tu, tv);
     if (m0 < DZ) { tu = 0; tv = 0; }
