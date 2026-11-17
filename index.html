@@ -5208,6 +5208,21 @@ margin:14px 0 0;padding:0 0 0 11px;border:0;border-left:2px solid rgba(168,196,2
 font-size:10.5px;line-height:1.8;color:rgba(170,190,212,.7);
 }
 #concepts .cg-q[hidden]{display:none}
+.term-graph .tedge{stroke:rgba(163,192,218,.34)}
+.term-graph .tedge.lit{stroke:rgba(212,233,255,.78)}
+.term-graph .tnode .name{font-weight:600;letter-spacing:.02em}
+.term-graph .tnode:hover .ring{stroke:rgba(198,226,248,.62);stroke-width:1.4}
+.term-graph .tnode:focus-visible .ring{stroke:rgba(214,238,255,.86);stroke-width:1.6}
+.term-graph .tnode.sel .ring{stroke:rgba(255,208,138,.9);stroke-width:1.8}
+.term-graph .fname{opacity:.62}
+#people h1,#people .term-title,#people .pg-title{font-size:clamp(32px,3.6vw,46px);letter-spacing:-.02em;line-height:1.08}
+#people .term-kicker,#people .eyebrow{margin-bottom:8px}
+#people .term-list{scrollbar-width:thin;scrollbar-color:rgba(255,255,255,.22) transparent;padding-bottom:26px}
+#people .term-list::-webkit-scrollbar{width:6px}
+#people .term-list::-webkit-scrollbar-thumb{background:rgba(255,255,255,.2);border-radius:99px}
+#people .term-list li:last-child{margin-bottom:12px}
+#people .term-list::after{content:"";position:sticky;bottom:0;display:block;height:34px;margin-top:-34px;pointer-events:none;background:linear-gradient(180deg,rgba(10,10,11,0),rgba(10,10,11,.92))}
+#people .tl-s{font-size:10px}
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
