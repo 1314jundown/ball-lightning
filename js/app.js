@@ -8208,7 +8208,7 @@ const concepts = document.getElementById('concepts');
 if (!stage || !center || !concepts) return;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MAX = 24000;
-let N = REDUCED ? 6000 : (innerWidth <= 1000 ? 12000 : MAX);
+let N = REDUCED ? 4200 : (innerWidth <= 1000 ? 7200 : 11500);
 const cv = document.createElement('canvas');
 cv.className = 'stage-pfx';
 cv.setAttribute('aria-hidden', 'true');
@@ -8290,8 +8290,8 @@ const y2 = y3 * cx - z1 * sx, z2 = y3 * sx + z1 * cx;
 const persp = 540 / Math.max(180, 540 - z2);
 const dep = Math.max(0.32, Math.min(1.5, (z2 + 240) / 360));
 const halo = (i % 21) === 0, mid = (i % 6) === 0;
-const s2 = (halo ? 3.0 : (mid ? 1.35 : 0.66)) * sz;
-const a2 = Math.min(1, (halo ? a * 0.17 : a) * dep);
+const s2 = (halo ? 2.35 : (mid ? 1.18 : 0.60)) * sz;
+const a2 = Math.min(1, (halo ? a * 0.085 : a * 0.92) * dep);
 put(i, 300 + x1 * persp, 300 + y2 * persp, s2 * persp, r, g, b, a2, tf);
 }
 const S = { t: 0, px: null, py: null, near: 0, obs: 0, look: 0, lobe: 268, bolt: null, branch: null, boltK: -1, sceneT: 0 };
@@ -8656,7 +8656,7 @@ const vs = 'attribute vec2 aP;attribute float aS;attribute vec4 aC;uniform vec2 
 'void main(){vec2 p=aP/uR*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);gl_PointSize=aS;vC=vec4(clamp(hue(aC.rgb,uH),0.0,1.0),aC.a);}';
 const fs = 'precision mediump float;varying vec4 vC;uniform float uG;' +
 'void main(){vec2 q=gl_PointCoord-0.5;float d=length(q)*2.0;if(d>1.0)discard;' +
-'float a=smoothstep(1.0,0.92,d)*(1.0+0.25*uG)*vC.a;gl_FragColor=vec4(vC.rgb*a,a);}';
+'float a=smoothstep(1.0,0.92,d)*(1.0+0.25*uG)*vC.a*0.56;gl_FragColor=vec4(vC.rgb*a,a);}';
 const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
 prog = gl.createProgram();
 gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
@@ -8952,7 +8952,7 @@ gl.bindTexture(gl.TEXTURE_2D, fbQTex);
 gl.uniform1i(gl.getUniformLocation(tProg, 'uB'), 1);
 gl.activeTexture(gl.TEXTURE0);
 }
-gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 0.20 : 0.0);
+gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 0.12 : 0.0);
 gl.uniform2f(gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
 gl.uniform2f(tProg && gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
