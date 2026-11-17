@@ -3344,7 +3344,7 @@ edges3.forEach(function(e){
 const A = project(e.a.x, e.a.y, e.a.z);
 const B = project(e.b.x, e.b.y, e.b.z);
 const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y, L3 = Math.hypot(dx, dy) || 1;
-const amp = (e.bow - 1) * L3;
+const amp = 0 /* 关系线走直线：曲线太硬，像折的铁丝 */;
 const off = e.side * amp;
 const C = project((e.a.x + e.b.x) / 2 - dy / L3 * off, (e.a.y + e.b.y) / 2 + dx / L3 * off, (e.a.z + e.b.z) / 2 + amp * 0.55);
 e.path.setAttribute('d', 'M' + A.x.toFixed(1) + ' ' + A.y.toFixed(1) + ' Q' + C.x.toFixed(1) + ' ' + C.y.toFixed(1) + ' ' + B.x.toFixed(1) + ' ' + B.y.toFixed(1));
