@@ -1941,7 +1941,7 @@ $('#stage').addEventListener('wheel', e => {
 e.preventDefault();
 setZoom(zScale + (e.deltaY < 0 ? .12 : -.12));
 }, { passive: false });
-const TUNE = { bright: 100, size: 100, glow: 50, hue: 0, fluct: 100, decay: 160 };
+const TUNE = { bright: 200, size: 40, glow: 100, hue: 30, fluct: 100, decay: 160 };
 window.TUNE = TUNE;
 function applyTune(){
 const st = $('#stage');
@@ -1964,7 +1964,6 @@ cfg.fluct = TUNE.fluct / 100;
 cfg.decay = Math.max(0.4, TUNE.decay / 100);
 }
 }
-$('#tune').dataset.open = 'true';
 $('#tuneTab').addEventListener('click', () => {
 const t = $('#tune');
 t.dataset.open = t.dataset.open === 'true' ? 'false' : 'true';
@@ -1976,8 +1975,8 @@ $('#pHue').addEventListener('input', e => { TUNE.hue = +e.target.value; applyTun
 if ($('#pFluct')) $('#pFluct').addEventListener('input', e => { TUNE.fluct = +e.target.value; applyTune(); });
 if ($('#pDecay')) $('#pDecay').addEventListener('input', e => { TUNE.decay = +e.target.value; applyTune(); });
 $('#tuneReset').addEventListener('click', () => {
-TUNE.bright = 100; TUNE.size = 100; TUNE.glow = 50; TUNE.hue = 0; TUNE.fluct = 100; TUNE.decay = 160;
-$('#pBright').value = 100; $('#pSize').value = 100; $('#pGlow').value = 50; $('#pHue').value = 0;
+TUNE.bright = 200; TUNE.size = 40; TUNE.glow = 100; TUNE.hue = 30; TUNE.fluct = 100; TUNE.decay = 160;
+$('#pBright').value = 200; $('#pSize').value = 40; $('#pGlow').value = 100; $('#pHue').value = 30;
 if ($('#pFluct')) $('#pFluct').value = 100;
 if ($('#pDecay')) $('#pDecay').value = 160;
 window.__tuneReady = false;
