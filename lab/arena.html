@@ -136,6 +136,21 @@
   #gate .gbtn:hover { background: rgba(90,150,220,.26); }
   #gate .gbtn.ghost { border-color: rgba(140,180,230,.22); background: none; color: #9db2cc; }
   #gate .gbtn.ghost:hover { border-color: rgba(140,180,230,.45); color: #dfe9ff; }
+  /* 底部频率条 + 宏聚变冷却：把「现在打哪个频」和「大招还有几秒」放到视线里 */
+  #freqHud { position: fixed; left: 50%; bottom: 62px; transform: translateX(-50%); z-index: 6;
+    display: flex; align-items: center; gap: 9px; padding: 7px 15px; border-radius: 999px;
+    background: rgba(8,16,28,.55); border: 1px solid rgba(120,170,230,.22);
+    backdrop-filter: blur(10px); -webkit-backdrop-filter: blur(10px);
+    font: 11px/1 var(--font-mono); letter-spacing: .14em; color: #8fb6dd; pointer-events: none; }
+  #freqHud .fd { width: 9px; height: 9px; border-radius: 50%; background: var(--c);
+    opacity: .26; transition: opacity .25s ease, box-shadow .25s ease, transform .25s ease; }
+  #freqHud .fd.on { opacity: 1; transform: scale(1.28); box-shadow: 0 0 12px 2px var(--c); }
+  #freqHud .fd[data-i="0"] { --c: #48d1ff; }
+  #freqHud .fd[data-i="1"] { --c: #ffb84d; }
+  #freqHud .fd[data-i="2"] { --c: #c678ff; }
+  #freqHud #freqName { color: #dfe9ff; min-width: 2.6em; }
+  #freqHud #ultCd { color: #7f9cc0; border-left: 1px solid rgba(120,170,230,.22); padding-left: 10px; }
+  #freqHud #ultCd.ready { color: #ffc46b; }
 </style>
 
 <style>
@@ -153,10 +168,10 @@
 .card::before {
   content: ""; position: absolute; inset: -52px; border-radius: 78px; z-index: -1;
   background: radial-gradient(closest-side, var(--glow, rgba(90,150,255,.45)), transparent 72%);
-  filter: blur(16px); opacity: 0; transition: opacity .32s ease; pointer-events: none;
+  filter: blur(16px); opacity: .20; transition: opacity .32s ease; pointer-events: none;
 }
 .card:hover { transform: translateY(-11px) rotateX(3deg); border-color: var(--edge, #7fb0ff); }
-.card:hover::before { opacity: .92; }
+.card:hover::before { opacity: .95; }
 .card:hover { box-shadow: 0 26px 72px -26px var(--shadow, rgba(90,150,255,.55)); }
 .card:hover .media { background: radial-gradient(circle at 50% 58%, var(--glow, rgba(60,110,190,.3)), transparent 72%); }
 .card:hover .ico { transform: scale(1.06); transition: transform .3s cubic-bezier(.2,.8,.2,1); }
@@ -164,8 +179,96 @@
 .card.common { --glow: rgba(80,130,190,.42); --edge: rgba(150,190,240,.55); --shadow: rgba(60,120,200,.5); }
 .card.rare   { --glow: rgba(70,130,255,.55); --edge: rgba(150,200,255,.7);  --shadow: rgba(70,140,255,.6); }
 .card.epic   { --glow: rgba(176,108,255,.55); --edge: rgba(210,160,255,.75); --shadow: rgba(176,108,255,.62); }
-.card.locked { -webkit-box-reflect: none; }
+.card.locked { -webkit-box-reflect: none; filter: grayscale(.5) brightness(.8); cursor: not-allowed; }
 .card.locked::before { display: none; }
+
+/* 扫光：一次 hover 掠过一道斜光，稀有卡换成冷紫——不靠抖动，靠「材质」说话 */
+.card {
+  background-image:
+    linear-gradient(105deg, transparent 30%, rgba(255,255,255,.13) 50%, transparent 70%),
+    linear-gradient(180deg, rgba(18,30,50,.62), rgba(8,14,26,.72));
+  background-size: 52% 100%, 100% 100%;
+  background-position: -150% 0, 0 0;   /* 光带停在卡外，hover 才扫进来 */
+  background-repeat: no-repeat;
+  transition: transform .30s cubic-bezier(.2,.8,.2,1), border-color .30s ease,
+              box-shadow .30s ease, background-position .9s cubic-bezier(.2,.8,.2,1);
+}
+.card:hover { background-position: 250% 0, 0 0; }
+.card.epic {
+  background-image:
+    linear-gradient(105deg, transparent 30%, rgba(212,168,255,.26) 50%, transparent 70%),
+    linear-gradient(180deg, rgba(26,18,44,.66), rgba(10,8,22,.76));
+}
+/* 进化卡：描边缓慢呼吸，一眼从三张里认出来 */
+.card.epic { animation: epicBreath 3.4s ease-in-out infinite; }
+@keyframes epicBreath {
+  0%, 100% { box-shadow: 0 0 0 1px rgba(190,140,255,.26), 0 18px 46px -26px rgba(176,108,255,.45); }
+  50%      { box-shadow: 0 0 0 1px rgba(216,176,255,.62), 0 24px 62px -22px rgba(176,108,255,.82); }
+}
+/* 序号徽章：选中前先亮一下，把「1/2/3」和手上的键对上 */
+.card .num { transition: transform .25s ease, color .25s ease, text-shadow .25s ease; }
+.card:hover .num { transform: scale(1.14); text-shadow: 0 0 14px var(--edge, #7fb0ff); }
+
+/* 手势摇杆：左边的圆盘就是「手在画面里的位置」，捏合时外圈亮起来 */
+#handBox{position:fixed;left:16px;top:50%;transform:translateY(-50%);z-index:6;
+  display:flex;flex-direction:column;align-items:center;gap:8px;
+  font:10px/1.5 ui-monospace,Consolas,monospace;letter-spacing:.08em;color:#8fa8c8;pointer-events:none}
+#handBox>*{pointer-events:auto}
+#handPad{position:relative;width:92px;height:92px;border-radius:50%;
+  border:1px dashed rgba(120,160,220,.26);
+  background:radial-gradient(circle,rgba(24,46,78,.45),rgba(10,18,32,.18) 72%,transparent 74%);
+  opacity:.35;transition:opacity .3s ease}
+#handPad::after{content:'';position:absolute;left:50%;top:50%;width:44px;height:44px;margin:-22px 0 0 -22px;
+  border-radius:50%;border:1px solid rgba(120,160,220,.16)}
+#handPad .dot{position:absolute;left:50%;top:50%;width:13px;height:13px;margin:-6.5px 0 0 -6.5px;border-radius:50%;
+  background:#7fd4ff;box-shadow:0 0 12px rgba(120,210,255,.85);transition:transform .06s linear}
+#handPad .fire{position:absolute;inset:-5px;border-radius:50%;border:2px solid transparent;transition:border-color .1s ease,box-shadow .1s ease}
+#handBox.firing #handPad .fire{border-color:rgba(255,214,140,.92);box-shadow:0 0 18px rgba(255,200,120,.5)}
+#handBox[data-state="live"] #handPad{opacity:1}
+#handBox[data-state="off"] #handPad{opacity:.3}
+#handBox[data-present="0"][data-state="live"] #handPad{border-color:rgba(255,160,90,.5)}
+#handBtn{display:inline-flex;align-items:center;gap:6px;padding:6px 11px;border-radius:999px;cursor:pointer;
+  background:rgba(14,24,40,.72);border:1px solid rgba(120,160,220,.28);color:#9fc6ef;
+  font:11px/1 ui-monospace,Consolas,monospace;letter-spacing:.1em;transition:border-color .2s ease,color .2s ease}
+#handBtn i{width:7px;height:7px;border-radius:50%;background:#5b7a9c;transition:background .2s ease,box-shadow .2s ease}
+#handBox[data-state="live"] #handBtn{border-color:rgba(120,200,255,.6);color:#dff0ff}
+#handBox[data-state="live"] #handBtn i{background:#6fd0ff;box-shadow:0 0 10px rgba(110,210,255,.9)}
+#handBox[data-state="loading"] #handBtn i{background:#ffcf80;animation:handPulse 1.1s ease-in-out infinite}
+#handBox[data-state="denied"] #handBtn{border-color:rgba(255,110,110,.45);color:#ffb4b4}
+#handBox[data-state="denied"] #handBtn i{background:#ff6b6b}
+@keyframes handPulse{50%{opacity:.3}}
+#handCam{width:160px;height:120px;object-fit:cover;border-radius:8px;border:1px solid rgba(120,160,220,.26);
+  transform:scaleX(-1);opacity:.72;display:none;pointer-events:none;box-shadow:0 10px 26px -16px rgba(0,0,0,.8)}
+/* 小屏常驻：没开摄像头时也留一个虚线占位框，否则用户根本不知道这里会有预览 */
+#handCamWrap{position:relative;display:block;width:160px;height:120px;border-radius:8px;cursor:pointer;line-height:0;
+  border:1px dashed rgba(120,160,220,.30);background:radial-gradient(120% 120% at 50% 40%,rgba(14,22,38,.92),rgba(6,10,18,.96));overflow:hidden}
+#handBox[data-state="live"] #handCamWrap,#handBox[data-state="loading"] #handCamWrap{border-style:solid;border-color:rgba(120,160,220,.45)}
+.cam-ph{position:absolute;inset:0;display:grid;place-items:center;text-align:center;line-height:1.7;
+  font:10px/1.7 ui-monospace,Consolas,monospace;letter-spacing:.08em;color:rgba(150,182,214,.62);pointer-events:none}
+.cam-ph b{display:block;font-weight:400;color:rgba(190,219,246,.9)}
+#handBox[data-state="live"] .cam-ph,#handBox[data-state="loading"] .cam-ph,#handBox[data-state="denied"] .cam-ph{display:none}
+#handBox[data-state="denied"] #handCamWrap{border-color:rgba(255,120,120,.35)}
+#handCamWrap::after{content:'';position:absolute;inset:0;border-radius:8px;pointer-events:none;
+  box-shadow:inset 0 0 0 1px rgba(140,190,255,.18);opacity:.9}
+#handBox.big #handCamWrap{width:320px;height:240px}
+#handBox[data-state="live"] #handCam,#handBox[data-state="loading"] #handCam{display:block}
+#handBox.big #handCam{width:320px;height:240px;opacity:.86}
+/* 骨架层：跟视频同尺寸、同样镜像，直接画 21 个关键点 */
+#handSkel{position:absolute;left:0;top:0;width:160px;height:120px;display:none;
+  transform:scaleX(-1);pointer-events:none;border-radius:8px}
+#handBox[data-state="live"] #handSkel,#handBox[data-state="loading"] #handSkel{display:block}
+#handBox.big #handSkel{width:320px;height:240px}
+#handTag{position:absolute;left:6px;top:6px;display:none;font:9px/1.5 ui-monospace,Consolas,monospace;
+  letter-spacing:.14em;color:#9fe9ff;background:rgba(6,14,24,.6);border:1px solid rgba(120,200,255,.32);
+  border-radius:4px;padding:1px 5px;pointer-events:none;white-space:nowrap}
+#handBox[data-present="1"] #handTag{display:block}
+#handLed{position:absolute;right:6px;top:6px;width:7px;height:7px;border-radius:50%;background:#5b7a9c;
+  box-shadow:0 0 0 2px rgba(10,16,26,.55);transition:background .2s ease,box-shadow .2s ease}
+#handBox[data-present="1"] #handLed{background:#6df0b0;box-shadow:0 0 10px rgba(109,240,176,.9)}
+#handBox[data-state="live"][data-present="0"] #handLed{background:#ffb46b;box-shadow:0 0 8px rgba(255,180,107,.7)}
+#handMsg{max-width:170px;text-align:center;font-size:10px;color:#7d94b4;line-height:1.45}
+#handBox[data-state="denied"] #handMsg{color:#ff9d9d}
+@media (max-height:760px){#handPad{width:74px;height:74px}#handCam,#handSkel,#handCamWrap{width:120px;height:90px}#handBox.big #handCam,#handBox.big #handSkel,#handBox.big #handCamWrap{width:240px;height:180px}}
 </style>
 </head>
 <body>
@@ -197,15 +300,35 @@
     <div>生命 <b id="hHp">100</b></div>
     <div id="hpWrap"><div id="hpBar"></div></div>
     <div id="hStats">伤害 4.0 · 间隔 0.55s · 连锁 0 · 索敌 6m</div>
-    <div style="margin-top:6px;color:#6f84a8">WASD / 鼠标移动 · 自动放电 · M 静音 · D 演示模式 · <a href="quiz.html" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35)">重新测试</a> · <a id="backLab" href="showcase.html" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35)">← 返回武器库</a> · <a id="backHome" href="../index.html#0" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35);pointer-events:auto">← 返回主站</a></div>
+    <div style="margin-top:6px;color:#6f84a8">WASD / 鼠标移动 · 自动放电 · <b style="color:#9fd0ff">Tab 对频（自动锁最近的靶标）</b> · <b style="color:#ffc46b">R 宏聚变</b> · M 静音 · D 演示模式 · <a href="quiz.html" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35)">重新测试</a> · <a id="backLab" href="showcase.html" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35)">← 返回武器库</a> · <a id="backHome" href="../index.html#0" style="color:#7f9cc0;text-decoration:none;border-bottom:1px solid rgba(127,156,192,.35);pointer-events:auto">← 返回主站</a></div>
   </div>
+</div>
+
+<div id="freqHud">
+  <i class="fd" data-i="0"></i><i class="fd" data-i="1"></i><i class="fd" data-i="2"></i>
+  <span id="freqName">低频</span>
+  <span id="ultCd" class="ready">R 就绪</span>
+</div>
+
+<!-- 手势：把手当虚拟摇杆（点一下开，再点一下关；H 同效；点小屏可以放大/收小） -->
+<div id="handBox" data-state="off">
+  <div id="handPad" aria-hidden="true"><i class="fire"></i><b class="dot" id="handDot"></b></div>
+  <button id="handBtn" type="button" aria-pressed="false"><i></i><span>手势</span></button>
+  <div id="handCamWrap" title="点一下开摄像头 / 再点放大收小">
+    <video id="handCam" playsinline muted></video>
+    <canvas id="handSkel" width="320" height="240"></canvas>
+    <i id="handTag">21 点 · 追踪中</i>
+    <i id="handLed"></i>
+    <span class="cam-ph" id="handPh">摄像头未开<b>点这里开始</b></span>
+  </div>
+  <span id="handMsg">点「手势」用摄像头开摇杆</span>
 </div>
 
 <div id="cards"><div id="cardBox">
   <div class="lvhdr">
     <div class="up">LEVEL UP</div>
     <div class="big">等级提升</div>
-    <div class="sub"><span id="cardLv">1</span> 级 · 选一项强化（按 1 / 2 / 3 直接选）</div>
+    <div class="sub"><span id="cardLv">1</span> 级 · 选一项强化（点卡片，或按 1 / 2 / 3）</div>
   </div>
   <div id="cardRow"></div>
   <div class="lvfoot"><span id="cardTip">按数字键或点击选择 · 本局构筑</span><span id="cardBuild"></span></div>
@@ -243,7 +366,7 @@
   if (!b && !q) { document.documentElement.classList.add('gated'); return; }
   if (q) { try { localStorage.setItem('bl.branch', q); } catch (e) {} }
   var s = document.createElement('script');
-  s.src = 'src/arena.js?v=96';
+  s.src = 'src/arena.js?v=105';
   document.body.appendChild(s);
 })();
 </script>

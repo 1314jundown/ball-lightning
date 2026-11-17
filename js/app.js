@@ -267,7 +267,13 @@ setStatus(NAV[i][0], NAV[i][1]);
 const noteEl = $('#screenNote');
 if (noteEl) noteEl.textContent = SCREEN_NOTE[i] || '';
 if (screens[i].scrollTop) screens[i].scrollTop = 0;
-if (i === 1) requestAnimationFrame(layoutChaps);
+if (i === 1) {
+const armed = window.__chapBolt && window.__chapBolt.arm ? window.__chapBolt.arm() : false;
+requestAnimationFrame(function () {
+layoutChaps();
+if (armed && window.__chapBolt && window.__chapBolt.run) window.__chapBolt.run();
+});
+}
 if (window.__labFx) {
 if (i === 3) requestAnimationFrame(() => { window.__labFx.resize(); window.__labFx.start(); if (window.__labGame) window.__labGame.resume(); if (window.__mini) window.__mini.resume(); });
 else { window.__labFx.stop(); if (window.__labGame) window.__labGame.pause(); if (window.__mini) window.__mini.pause(); }
@@ -728,13 +734,89 @@ new IntersectionObserver(function (es) { running(es[0].isIntersecting); }, { thr
 document.addEventListener('visibilitychange', function () {
 running(!document.hidden && stage.classList.contains('on'));
 });
+const flash = document.createElement('div');
+flash.className = 'chap-flash';
+wrap.appendChild(flash);
+let booting = false, bootedOnce = false, bootedQuick = false, lastArmAt = 0, finishTimer = 0;
+stage.addEventListener('pointerdown', function () { if (booting) finish(); }, true);
+function arm(force){
+if (booting) return false;
+if (document.getElementById('bootGate') && !force) return false;
+const t = performance.now();
+if (!force && t - lastArmAt < 900) return false;
+lastArmAt = t;
+booting = true;
+stage.classList.add('is-boot', 'is-boot-now');
+requestAnimationFrame(function () { stage.classList.remove('is-boot-now'); });
+wrap.classList.add('is-boot');
+stat.textContent = '影像 · 放电中';
+return true;
+}
+function finish(){
+if (!booting) return;
+clearTimeout(finishTimer);
+const nx = (typeof chapNodeX[chapIdx] === 'number') ? chapNodeX[chapIdx] : .9;
+flash.classList.remove('is-on');
+void flash.offsetWidth;
+flash.classList.add('is-on');
+stage.classList.remove('is-boot');
+wrap.classList.remove('is-boot');
+stat.textContent = '影像 · 装载中';
+booting = false;
+bootedOnce = true;
+setTimeout(function () {
+to(Math.max(.05, Math.min(.98, nx)), bootedQuick ? 420 : 656);
+if (window.__chapTel) window.__chapTel.update(Math.max(.05, Math.min(.98, nx)));
+}, 70);
+}
+function run(){
+if (!booting) return;
+bootedQuick = bootedOnce;          /* 第一次进屏演全段，之后再进就快一点 */
+const sweep = bootedQuick ? 520 : 1180;
+let swept = false;
+function sweep2(){
+if (swept) return;
+swept = true;
+paint(.035);
+to(1, sweep);
+finishTimer = setTimeout(finish, sweep + (bootedQuick ? 90 : 210));
+}
+if (vid.readyState >= 2) sweep2();
+else {
+const onReady = function () { vid.removeEventListener('loadeddata', onReady); sweep2(); };
+vid.addEventListener('loadeddata', onReady);
+setTimeout(function () {
+if (!swept) { vid.removeEventListener('loadeddata', onReady); sweep2(); }
+}, 2000);
+}
+}
 window.__chapBolt = {
+arm: arm,
+run: run,
+booting: function () { return booting; },
 sync: function (i){
+if (booting) return;            /* 开场期间别被 hover/布局抢走电轨 */
 const nx = (typeof chapNodeX[i] === 'number') ? chapNodeX[i] : 0;
 to(Math.max(.05, Math.min(.98, nx)), 900);
 },
 progress: function () { return cur; },
 video: vid
+};
+})();
+(function gateBoot(){
+const orig = window.__bootGateFinish;
+if (typeof orig !== 'function') return;
+let fired = false;
+window.__bootGateFinish = function () {
+const r = orig.apply(this, arguments);
+if (fired) return r;
+fired = true;
+const b = window.__chapBolt;
+if (!b || !b.arm || !b.run) return r;
+if (cur !== 1 || chapMode !== 'scatter') return r;
+if (!b.arm(true)) return r;
+setTimeout(function () { b.run(); }, 300);
+return r;
 };
 })();
 (function chapTelemetry(){
@@ -1433,10 +1515,23 @@ ${[150,203,256,309,362,415,468].map(x => `<line x1="${x}" y1="150" x2="${x}" y2=
 <polyline points="300,252 286,300 314,306 296,352" fill="none" stroke="#dfe6ff" stroke-width="1.4" opacity=".9"/>
 </svg>`,
 ball: () => `<svg viewBox="0 0 600 600" aria-hidden="true">
-<circle cx="300" cy="300" r="176" fill="none" stroke="rgba(160,175,255,.16)" stroke-dasharray="3 10" class="fx-spin"/>
-<circle cx="300" cy="300" r="116" fill="none" stroke="rgba(160,175,255,.2)"/>
-<circle cx="300" cy="300" r="76" fill="rgba(125,140,255,.12)" stroke="rgba(195,208,255,.5)" class="fx-breathe"/>
-<circle cx="300" cy="300" r="30" fill="#e6ebff" opacity=".92"/>
+<defs>
+<radialGradient id="orbCore" cx="50%" cy="50%" r="50%">
+<stop offset="0%" stop-color="#ffffff"/>
+<stop offset="26%" stop-color="#fff6e0"/>
+<stop offset="48%" stop-color="rgba(255,206,140,.86)"/>
+<stop offset="72%" stop-color="rgba(255,138,72,.30)"/>
+<stop offset="100%" stop-color="rgba(255,120,60,0)"/>
+</radialGradient>
+<radialGradient id="orbHaze" cx="50%" cy="50%" r="50%">
+<stop offset="45%" stop-color="rgba(255,170,110,.15)"/>
+<stop offset="100%" stop-color="rgba(255,150,90,0)"/>
+</radialGradient>
+</defs>
+<circle cx="300" cy="300" r="196" fill="url(#orbHaze)" class="fx-breathe"/>
+<circle cx="300" cy="300" r="176" fill="none" stroke="rgba(160,175,255,.14)" stroke-dasharray="3 10" class="fx-spin"/>
+<circle cx="300" cy="300" r="116" fill="none" stroke="rgba(160,190,255,.18)"/>
+<circle cx="300" cy="300" r="74" fill="url(#orbCore)" class="fx-breathe"/>
 <text x="300" y="536" text-anchor="middle" fill="#7d84a0" font-size="9" font-family="monospace" letter-spacing="3">PLASMA ORB · 机制未定</text>
 </svg>`,
 macro: () => `<svg viewBox="0 0 600 600" aria-hidden="true">
@@ -1637,6 +1732,672 @@ syncConceptStatus();
 }).observe(statusWrap, { childList: true });
 }
 syncConceptStatus();
+const HANDS = {
+state: 'off',          // off | loading | live | fallback
+src: '',               // landmark | motion | debug
+delegate: '',
+active: false,         // 手势层是否在控制点云（手离开画面时为 false，让位移平滑归零而不是硬跳）
+present: false,        // 这一帧画面里有没有手
+handsN: 0,             // 认出几只（0/1/2）
+lm: null, lm2: null,   // 主手 / 副手的关键点（画框用）
+x: 300, y: 300, tx: 300, ty: 300,
+pinch: 0, pin: 0, open: 0, burst: 0,
+fistRaw: 0, fist: 0,           // 握拳 → 熄灭 / 收成一个点
+swirlRaw: 0, swirl: 0,         // 手腕 roll → 旋涡方向与速度
+depthRaw: 0, depth: 0,         // 掌部大小当深度 → 推远 / 拉近
+bridgeRaw: 0, bridge: 0,       // 双手 → 两掌之间拉一条炬桥
+bp: { x1: 300, y1: 300, x2: 300, y2: 300 },
+gesture: '',                   // 当前主导手势，给面板读数用
+man: { depth: 0, fist: 0, swirl: 0, bridge: 0 },   // 键盘手动的同类量（和真手势取 max）
+inferMs: 0, hz: 0, latency: 0, errText: ''
+};
+window.__conceptHands = HANDS;
+(function conceptHands(){
+const sec = $('#concepts');
+const panel = document.querySelector('#tune .tune-panel');
+if (!sec || !panel) return;
+const HAS_WORKER = typeof Worker === 'function' && typeof OffscreenCanvas !== 'undefined';
+const row = document.createElement('div');
+row.className = 'tune-row hands-row';
+row.innerHTML = '<span>手势</span><button class="hands-btn" id="handsToggle" type="button" aria-pressed="false">开启</button><output id="handsOut">关</output>';
+const note = document.createElement('p');
+note.className = 'tune-note hands-note';
+const TIPS = '手势：牵引 · 收束 · 爆散 · 熄灭 · 旋涡 · 远近 · 挥手切概念 · 双手炬桥；键盘 A/D 切概念、W/S 远近、F 熄灭、Q/E 旋涡、B 炬桥。首次开启下载约 17 MB（之后离线可用），没有摄像头或加载失败自动退回帧差追踪。';
+note.textContent = TIPS;
+const firstRow = panel.querySelector('.tune-row');
+if (firstRow) panel.insertBefore(row, firstRow); else panel.appendChild(row);
+panel.insertBefore(note, row.nextSibling);
+const btn = row.querySelector('#handsToggle');
+const out = row.querySelector('#handsOut');
+let video = null, stream = null, worker = null, timer = null;
+let busy = false, busyAt = 0, lastFrame = 0, tCap = 0;
+const lat = [];
+let lastOut = '';
+function ui(){
+const s = HANDS.state;
+btn.textContent = s === 'off' ? '开启' : s === 'loading' ? '取消' : '关闭';
+btn.setAttribute('aria-pressed', s === 'off' ? 'false' : 'true');
+let o =
+s === 'off' ? '关' :
+s === 'loading' ? '加载中…' :
+s === 'live' ? '就绪 · ' + (HANDS.delegate || 'CPU') + ' · ' + Math.round(HANDS.hz) + ' Hz' :
+s === 'fallback' ? '降级 · 帧差追踪' : '失败';
+if (HANDS.active && HANDS.gesture && s !== 'off') o += ' · ' + HANDS.gesture;
+if (o !== lastOut) { out.textContent = o; lastOut = o; }
+sec.dataset.hands = s === 'off' ? 'off' : s;
+const want = (HANDS.errText && s !== 'live' && s !== 'fallback') ? HANDS.errText : TIPS;
+if (note.textContent !== want) note.textContent = want;
+}
+function fail(text, allowFallback){
+HANDS.errText = text;
+if (allowFallback && stream) { toMotion(); return; }
+HANDS.state = 'off'; HANDS.present = false; stopAll(); closeCam(); ui();
+}
+const CONCEPT_KEYS = Object.keys(nodes);
+let swipeCool = 0, swipeLock = 0, lastPx = 0, lastPxt = 0, lastPy = 0, lastPyt = 0;
+function handTo600(px, py){ return { x: 300 + (0.5 - px) * 520, y: 300 + (py - 0.5) * 380 }; }
+function readHand(lm){
+let px = 0, py = 0;
+[0, 5, 9, 13, 17].forEach(i => { px += lm[i].x; py += lm[i].y; });
+px /= 5; py /= 5;
+const wid = Math.hypot(lm[5].x - lm[17].x, lm[5].y - lm[17].y) || 0.08;
+const pinchD = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / wid;
+let tips = 0;
+[8, 12, 16, 20].forEach(i => { tips += Math.hypot(lm[i].x - px, lm[i].y - py) / wid; });
+tips /= 4;
+const open = Math.max(0, Math.min(1, (tips - 1.05) / 0.55));
+const fist = open < 0.34 ? Math.max(0, Math.min(1, (1.32 - tips) / 0.34)) : 0;
+const roll = Math.atan2(lm[9].x - lm[0].x, -(lm[9].y - lm[0].y));
+const swirl = Math.max(-1, Math.min(1, roll / (Math.PI / 4)));
+const depth = Math.max(-1, Math.min(1, (0.118 - wid) / 0.055));
+return { px, py, wid, open, fist, swirl, depth, pinch: Math.max(0, Math.min(1, (0.62 - pinchD) / 0.27)) };
+}
+const HAND_MIN_W = 0.085;      // 约 1.1 m 以内：60 cm 处 ≈0.13，2 m 处 ≈0.04
+const HAND_KEEP_W = 0.068;     // 已锁定的手放宽一点，避免一有抖动就掉
+const HAND_LOOSE_W = 0.058;    // 炬桥的第二只手：只剩「不是背景路人」这一道门槛
+let lockUntil = 0;
+function pickHand(list, loose){
+let best = null;
+for (let i = 0; i < list.length; i++){
+const lm = list[i];
+if (!lm || lm.length < 21) continue;
+const wid = Math.hypot(lm[5].x - lm[17].x, lm[5].y - lm[17].y);
+let px = 0, py = 0;
+[0, 5, 9, 13, 17].forEach(j => { px += lm[j].x; py += lm[j].y; });
+px /= 5; py /= 5;
+if (px < 0.06 || px > 0.94 || py < 0.06 || py > 0.94) continue;
+if (!best || wid > best.wid) best = { lm, wid, px, py };
+}
+if (!best) return null;
+const now = performance.now();
+const min = loose ? HAND_LOOSE_W : (now < lockUntil ? HAND_KEEP_W : HAND_MIN_W);
+HANDS.nearWid = best.wid;
+if (best.wid < min) return null;
+if (!loose) lockUntil = now + 700;
+return best;
+}
+let debugHold = 0;   // 注入口给的时间窗，避免真 worker 的空帧把测试值立刻冲掉
+function ingestAll(list){
+if (performance.now() < debugHold) return;
+if (!list || !list.length) {
+HANDS.handsN = 0; HANDS.present = false; HANDS.lm = null; HANDS.lm2 = null;
+HANDS.tx = 300; HANDS.ty = 300; HANDS.pin = 0;
+HANDS.fistRaw = 0; HANDS.swirlRaw = 0; HANDS.depthRaw = 0; HANDS.bridgeRaw = 0;
+return;
+}
+const picked = pickHand(list);
+if (!picked) {
+HANDS.handsN = 0; HANDS.present = false; HANDS.lm = null; HANDS.lm2 = null;
+HANDS.tx = 300; HANDS.ty = 300; HANDS.pin = 0;
+HANDS.fistRaw = 0; HANDS.swirlRaw = 0; HANDS.depthRaw = 0; HANDS.bridgeRaw = 0;
+HANDS.gesture = '未识别';
+return;
+}
+HANDS.lm = picked.lm;
+const a = readHand(picked.lm), p = handTo600(a.px, a.py);
+const others = list.filter(l => l !== picked.lm);
+HANDS.handsN = 1 + others.length;
+HANDS.present = true; HANDS.active = true;
+HANDS.pin = a.pinch; HANDS.open = a.open;
+HANDS.fistRaw = a.fist; HANDS.swirlRaw = a.swirl; HANDS.depthRaw = a.depth;
+const now = performance.now();
+const dt = lastFrame ? Math.max(0.016, (now - lastFrame) / 1000) : 0.08;
+lastFrame = now;
+const dtV = lastPxt ? Math.max(0.016, (now - lastPxt) / 1000) : 0.08;
+const vxRaw = lastPxt ? (a.px - lastPx) / dtV : 0;
+const vyRaw = lastPyt ? (a.py - lastPy) / dtV : 0;
+HANDS.vxRaw = vxRaw; HANDS.vyRaw = vyRaw;
+HANDS.vx = HANDS.vx * 0.55 + vxRaw * 0.45;
+lastPx = a.px; lastPxt = now; lastPy = a.py; lastPyt = now;
+const other = others.length ? pickHand(others, true) : null;
+if (other) {
+const b = readHand(other.lm), q = handTo600(b.px, b.py);
+HANDS.lm2 = other.lm;
+HANDS.bridgeRaw = 1;
+HANDS.bp.x1 = p.x; HANDS.bp.y1 = p.y; HANDS.bp.x2 = q.x; HANDS.bp.y2 = q.y;
+HANDS.gesture = '桥接';
+} else {
+HANDS.lm2 = null;
+HANDS.bridgeRaw = 0;
+if (swipeLock > 0) swipeLock -= dt;
+if (swipeCool > 0) swipeCool -= dt;
+const fast = Math.abs(vxRaw) > 1.75 && Math.abs(vxRaw) > Math.abs(vyRaw) * 2.6;
+if (fast && a.open > 0.50 && a.pinch < 0.25 && a.fist < 0.20 && swipeCool <= 0 && sec.classList.contains('on')) {
+swipe(vxRaw > 0 ? -1 : 1);
+swipeCool = 0.85;
+swipeLock = 0.45;
+}
+if (swipeLock <= 0) { HANDS.tx = p.x; HANDS.ty = p.y; }
+HANDS.gesture = a.fist > 0.45 ? '熄灭' : a.pinch > 0.4 ? '收束' : Math.abs(a.swirl) > 0.5 ? '旋涡' : '牵引';
+}
+if (a.open > 0.55 && HANDS.vy < -1.15 && HANDS.burst <= 0.02 && others.length === 0) { HANDS.burst = 1; HANDS.gesture = '爆散'; }
+if (HANDS.pin > 0.75) HANDS.burst = Math.min(HANDS.burst, 0.001);
+}
+function swipe(dir){
+const cur = (typeof nodeKey === 'string') ? nodeKey : 'ball';
+const i = CONCEPT_KEYS.indexOf(cur);
+if (i < 0) return;
+const n = CONCEPT_KEYS.length;
+const next = CONCEPT_KEYS[(i + dir + n) % n];
+const el = document.querySelector('#cgList [data-node="' + next + '"]');
+if (typeof setNode === 'function') setNode(next);
+if (el && el.scrollIntoView) el.scrollIntoView({ block: 'nearest' });
+HANDS.gesture = dir > 0 ? '下一个' : '上一个';
+HANDS.swipes = (HANDS.swipes || 0) + 1;
+}
+let lastY = 0, lastYt = 0;
+function trackVy(ny){
+const now = performance.now();
+if (lastYt) {
+const dt = Math.max(0.016, (now - lastYt) / 1000);
+HANDS.vy = HANDS.vy * 0.6 + ((ny - lastY) / dt) * 0.4;
+}
+lastY = ny; lastYt = now;
+}
+function sample(){
+if (!video || video.readyState < 2) return;
+if (document.hidden || !sec.classList.contains('on')) return;   /* 离开 02 屏 / 切到后台就不再抓帧，摄像头和 CPU 都省下来 */
+const now = performance.now();
+if (now - lastFrame < 1000 / 15) return;         // 15Hz 上限，别跟点云抢
+if (busy && now - busyAt < 1500) return;          // 上一帧没回来，跳过
+busy = true; busyAt = now; tCap = now;
+createImageBitmap(video, { resizeWidth: 384, resizeHeight: 288, resizeQuality: 'medium' }).then(bmp => {
+if (!worker) { try { bmp.close(); } catch (e) {} return; }
+worker.postMessage({ type: 'frame', bitmap: bmp, ts: now }, [bmp]);
+}).catch(() => { busy = false; });
+}
+function onWorker(ev){
+const m = ev.data || {};
+if (m.type === 'ready') {
+HANDS.delegate = m.delegate || '';
+HANDS.state = 'live'; HANDS.src = 'landmark'; HANDS.errText = '';
+ui(); startSample();
+return;
+}
+if (m.type === 'error') { fail('手势模型出错（' + m.stage + '）：' + m.message, true); return; }
+busy = false;
+if (m.ts) { lat.push(performance.now() - m.ts); if (lat.length > 10) lat.shift(); HANDS.latency = lat.slice().sort((a, b) => a - b)[lat.length >> 1] || 0; }
+if (m.inferMs) { HANDS.inferMs = HANDS.inferMs * 0.8 + m.inferMs * 0.2; HANDS.hz = Math.min(15, 1000 / Math.max(16, m.inferMs + 33)); }
+if (m.type === 'hands' && m.hands && m.hands.length) { HANDS.score = m.hands[0].score || 0; ingestAll(m.hands.map(h => h.landmarks)); trackVy(m.hands[0].landmarks[0].y); }
+else if (m.type === 'empty') { ingestAll(null); }
+ui();
+}
+function startSample(){
+stopSample();
+timer = setInterval(sample, 1000 / 15);
+}
+function stopSample(){ if (timer) { clearInterval(timer); timer = null; } }
+let mcv = null, mctx = null, prev = null, motionTimer = null;
+function toMotion(){
+HANDS.state = 'fallback'; HANDS.src = 'motion'; HANDS.errText = '';
+if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+stopSample();
+mcv = mcv || document.createElement('canvas');
+mcv.width = 80; mcv.height = 60;
+mctx = mcv.getContext('2d', { willReadFrequently: true });
+prev = null;
+ui();
+if (motionTimer) clearInterval(motionTimer);
+motionTimer = setInterval(motionTick, 90);
+}
+function motionTick(){
+if (!video || video.readyState < 2 || !mctx) return;
+mctx.drawImage(video, 0, 0, 80, 60);
+let d;
+try { d = mctx.getImageData(0, 0, 80, 60).data; } catch (e) { return; }
+const cur = new Uint8Array(80 * 60);
+for (let i = 0, j = 0; i < cur.length; i++, j += 4) cur[i] = (d[j] * 3 + d[j + 1] * 4 + d[j + 2] * 2) >> 3;
+if (!prev) { prev = cur; return; }
+let w = 0, sx = 0, sy = 0, s2 = 0;
+for (let i = 0; i < cur.length; i++) {
+const v = Math.abs(cur[i] - prev[i]);
+if (v < 12) continue;
+const x = i % 80, y = (i / 80) | 0;
+w += v; sx += x * v; sy += y * v; s2 += v * (x * x + y * y);
+}
+prev = cur;
+if (w < 80 * 60 * 3) { HANDS.present = false; HANDS.tx = 300; HANDS.ty = 300; HANDS.pin = 0; HANDS.fistRaw = 0; HANDS.swirlRaw = 0; HANDS.depthRaw = 0; HANDS.bridgeRaw = 0; return; }
+const cx = sx / w / 80, cy = sy / w / 60;
+const spread = Math.sqrt(Math.max(0, s2 / w - Math.pow(sx / w, 2) - Math.pow(sy / w, 2)));
+HANDS.tx = 300 + (0.5 - cx) * 520;
+HANDS.ty = 300 + (cy - 0.5) * 380;
+HANDS.pin = Math.max(0, Math.min(1, 1 - spread / 22));
+HANDS.open = Math.max(0, Math.min(1, spread / 26));
+HANDS.present = true; HANDS.active = true;
+trackVy(cy);
+ui();
+}
+function stopAll(){
+stopSample();
+if (motionTimer) { clearInterval(motionTimer); motionTimer = null; }
+if (worker) { try { worker.terminate(); } catch (e) {} worker = null; }
+if (stream) { stream.getTracks().forEach(t => t.stop()); stream = null; }
+if (video) { try { video.pause(); video.srcObject = null; } catch (e) {} }
+HANDS.lm = null; HANDS.score = 0; HANDS.lm2 = null;
+HANDS.present = false; HANDS.active = false; HANDS.burst = 0; HANDS.pin = 0;
+HANDS.tx = 300; HANDS.ty = 300;
+lastY = lastYt = 0; lat.length = 0; lastFrame = 0;
+}
+async function start(){
+HANDS.errText = '';
+if (location.protocol === 'file:') {
+fail('本地文件（file://）打开时浏览器不允许摄像头与 worker，手势不可用；用 http 打开或在线上看。', false);
+return;
+}
+if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) { fail('这台浏览器没有摄像头接口（getUserMedia 不可用）。', false); return; }
+HANDS.state = 'loading'; ui();
+try {
+stream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 }, facingMode: 'user' }, audio: false });
+} catch (e) {
+fail('摄像头不可用（' + (e && e.name || 'error') + '）：拒绝授权或没有设备。', false);
+return;
+}
+video = camEl;
+video.muted = true; video.playsInline = true; video.srcObject = stream;
+try { await video.play(); } catch (e) {}
+openCam();
+if (!HAS_WORKER) { toMotion(); return; }
+try {
+worker = new Worker('assets/hands/hand-worker.js');
+} catch (e) { toMotion(); return; }
+worker.onmessage = onWorker;
+worker.onerror = () => { fail('手势 worker 启动失败（模型或 wasm 没找到）。', true); };
+const base = new URL('assets/hands/', location.href).href;
+worker.postMessage({ type: 'init', wasmPath: base + 'wasm', modelPath: base + 'hand_landmarker.task' });
+setTimeout(() => { if (HANDS.state === 'loading' && !HANDS.delegate) toMotion(); }, 20000);
+}
+btn.addEventListener('click', () => {
+if (HANDS.state === 'off' || HANDS.state === 'fallback') { stopAll(); start(); }
+else closeHands();
+});
+ui();
+const stage = $('#stage');
+const camEl = document.createElement('video');
+camEl.className = 'stage-cam'; camEl.muted = true; camEl.playsInline = true; camEl.autoplay = true;
+const veilEl = document.createElement('div');
+veilEl.className = 'stage-veil';
+const boxEl = document.createElement('canvas');
+boxEl.className = 'stage-hands';
+const exitBtn = document.createElement('button');
+exitBtn.type = 'button'; exitBtn.className = 'hands-exit';
+exitBtn.innerHTML = '关闭手势 <span>ESC</span>';
+const helpBtn = document.createElement('button');
+helpBtn.type = 'button'; helpBtn.className = 'hands-exit hands-help';
+helpBtn.innerHTML = '手势教程 <span>?</span>';
+const tourEl = document.createElement('div');
+tourEl.className = 'hands-tour';
+tourEl.innerHTML =
+'<div class="ht-head"><b id="htN">手势教程 1 / 7</b><button class="ht-skip" type="button">跳过</button></div>' +
+'<div class="ht-body"><b id="htT">移动手掌</b><span id="htD"></span></div>' +
+'<div class="ht-dots" id="htDots"></div>';
+if (stage) {
+stage.insertBefore(camEl, stage.firstChild);
+stage.insertBefore(veilEl, camEl.nextSibling);
+stage.appendChild(boxEl);
+stage.appendChild(exitBtn);
+stage.appendChild(helpBtn);
+stage.appendChild(tourEl);
+}
+exitBtn.addEventListener('click', () => closeHands());
+const boxCtx = boxEl.getContext('2d');
+const htN = tourEl.querySelector('#htN'), htT = tourEl.querySelector('#htT');
+const htD = tourEl.querySelector('#htD'), htDots = tourEl.querySelector('#htDots');
+const TOUR = [
+{ k: 'move',   t: '移动手掌',   d: '手在画面里左右上下移动 → 闪电跟着走' },
+{ k: 'pinch',  t: '捏合',       d: '拇指和食指靠近 → 收束成球，松手回弹' },
+{ k: 'fist',   t: '握拳',       d: '握拳 → 整团收紧、变暗' },
+{ k: 'swirl',  t: '转手腕',     d: '手腕向左/右转 → 云被搅成旋涡' },
+{ k: 'depth',  t: '推近 / 拉远', d: '手掌靠近镜头 → 放大变亮；推远 → 缩回' },
+{ k: 'swipe',  t: '快速挥手',   d: '张着手快速左右一挥 → 切到下一个概念' },
+{ k: 'bridge', t: '双手',       d: '两只手都进场 → 粒子连成一道桥' }
+];
+let tourOn = false, tourI = 0, tourHold = 0, tourSwipe0 = 0, tourTimer = null;
+const TOUR_KEY = 'bh.handsTour';
+TOUR.forEach(() => {});           /* 占位：点阵按下标渲染 */
+function tourTest(k){
+const H = HANDS;
+if (k === 'move') return H.present && (Math.abs(H.x - 300) > 45 || Math.abs(H.y - 300) > 40);
+if (k === 'pinch') return H.pin > 0.55;
+if (k === 'fist') return (H.fist || 0) > 0.5;
+if (k === 'swirl') return Math.abs(H.swirl || 0) > 0.55;
+if (k === 'depth') return Math.abs(H.depth || 0) > 0.5;
+if (k === 'swipe') return (H.swipes || 0) > tourSwipe0;
+if (k === 'bridge') return (H.handsN || 0) > 1;
+return false;
+}
+function tourRender(){
+if (!tourEl) return;
+tourEl.classList.toggle('on', tourOn);
+if (!tourOn) return;
+if (tourI >= TOUR.length) return;
+const s = TOUR[tourI];
+htN.textContent = '手势教程 ' + (tourI + 1) + ' / ' + TOUR.length;
+htT.textContent = s.t; htD.textContent = s.d;
+if (htDots.childElementCount !== TOUR.length) {
+htDots.innerHTML = TOUR.map(() => '<i></i>').join('');
+}
+for (let i = 0; i < htDots.children.length; i++) {
+const el = htDots.children[i];
+el.className = i < tourI ? 'done' : i === tourI ? 'now' : '';
+}
+}
+function tourStart(force){
+if (!force && localStorage.getItem(TOUR_KEY)) return;
+tourOn = true; tourI = 0; tourHold = 0; tourSwipe0 = HANDS.swipes || 0;
+tourRender();
+if (!tourTimer) tourTimer = setInterval(tourTick, 120);
+}
+function tourStop(done){
+tourOn = false; tourRender();
+if (tourTimer) { clearInterval(tourTimer); tourTimer = null; }
+if (done) { try { localStorage.setItem(TOUR_KEY, '1'); } catch (e) {} }
+}
+function tourTick(){
+if (!tourOn) { if (tourTimer) { clearInterval(tourTimer); tourTimer = null; } return; }
+if (tourTest(TOUR[tourI].k)) tourHold += 0.12; else tourHold = Math.max(0, tourHold - 0.18);
+if (tourHold > 0.5) {
+tourHold = 0; tourI++;
+if (tourI >= TOUR.length) { tourStop(true); return; }
+}
+tourRender();
+}
+tourEl.querySelector('.ht-skip').addEventListener('click', () => tourStop(true));
+helpBtn.addEventListener('click', () => tourStart(true));
+let boxRaf = null;
+const bS = { x: 0, y: 0, w: 0, h: 0, on: false };
+const bS2 = { x: 0, y: 0, w: 0, h: 0, on: false };
+function openCam(){ sec.dataset.cam = 'on'; document.body.classList.add('hands-cam'); startBox(); tourStart(false); }
+function closeCam(){ delete sec.dataset.cam; document.body.classList.remove('hands-cam'); stopBox(); tourStop(false); }
+function closeHands(){ stopAll(); closeCam(); HANDS.state = 'off'; HANDS.errText = ''; ui(); }
+function startBox(){ if (!boxRaf) boxRaf = requestAnimationFrame(drawBox); }
+function stopBox(){
+if (boxRaf) { cancelAnimationFrame(boxRaf); boxRaf = null; }
+bS.on = false; bS2.on = false;
+if (boxCtx) boxCtx.clearRect(0, 0, boxEl.width, boxEl.height);
+}
+function handRect(lm, r){
+let x0 = 1, y0 = 1, x1 = 0, y1 = 0;
+for (let i = 0; i < lm.length; i++){
+const mx = 1 - lm[i].x;
+if (mx < x0) x0 = mx; if (mx > x1) x1 = mx;
+if (lm[i].y < y0) y0 = lm[i].y; if (lm[i].y > y1) y1 = lm[i].y;
+}
+const padx = (x1 - x0) * 0.15, pady = (y1 - y0) * 0.15;
+x0 -= padx; x1 += padx; y0 -= pady; y1 += pady;
+let tx = x0 * r.width, ty = y0 * r.height, tw = (x1 - x0) * r.width, th = (y1 - y0) * r.height;
+tw = Math.min(tw, r.width * 0.96); th = Math.min(th, r.height * 0.96);
+tx = Math.max(0, Math.min(r.width - tw, tx));
+ty = Math.max(0, Math.min(r.height - th, ty));
+return { tx, ty, tw, th };
+}
+function boxTrack(st, rect){
+if (!st.on) { st.x = rect.tx; st.y = rect.ty; st.w = rect.tw; st.h = rect.th; st.on = true; }
+else {
+const k = 0.3;
+st.x += (rect.tx - st.x) * k; st.y += (rect.ty - st.y) * k;
+st.w += (rect.tw - st.w) * k; st.h += (rect.th - st.h) * k;
+}
+}
+function boxCenter(st, dp){ return { x: (st.x + st.w / 2) * dp, y: (st.y + st.h / 2) * dp }; }
+function drawBoxShape(st, dp, label, dim){
+const x = st.x * dp, y = st.y * dp;
+const bw = Math.max(26 * dp, st.w * dp), bh = Math.max(26 * dp, st.h * dp);
+const rad = Math.min(16 * dp, bw * 0.22, bh * 0.22);
+const line = dim ? 'rgba(255,214,150,.42)' : 'rgba(127,212,232,.5)';
+const edge = dim ? 'rgba(255,214,150,.9)' : 'rgba(127,212,232,.95)';
+const text = dim ? 'rgba(255,214,150,.96)' : 'rgba(127,212,232,.96)';
+boxCtx.save();
+boxCtx.lineJoin = 'round';
+boxCtx.strokeStyle = line;
+boxCtx.lineWidth = (dim ? 1 : 1.3) * dp;
+boxCtx.beginPath();
+if (boxCtx.roundRect) boxCtx.roundRect(x, y, bw, bh, rad); else boxCtx.rect(x, y, bw, bh);
+boxCtx.stroke();
+const c = Math.min(24 * dp, bw * 0.3, bh * 0.3);
+boxCtx.strokeStyle = edge;
+boxCtx.lineWidth = (dim ? 2 : 3) * dp;
+boxCtx.beginPath();
+boxCtx.moveTo(x, y + c); boxCtx.lineTo(x, y); boxCtx.lineTo(x + c, y);
+boxCtx.moveTo(x + bw - c, y); boxCtx.lineTo(x + bw, y); boxCtx.lineTo(x + bw, y + c);
+boxCtx.moveTo(x + bw, y + bh - c); boxCtx.lineTo(x + bw, y + bh); boxCtx.lineTo(x + bw - c, y + bh);
+boxCtx.moveTo(x + c, y + bh); boxCtx.lineTo(x, y + bh); boxCtx.lineTo(x, y + bh - c);
+boxCtx.stroke();
+if (label) {
+boxCtx.font = (10.5 * dp) + 'px ui-monospace, Consolas, "Courier New", monospace';
+const lw = boxCtx.measureText(label).width;
+const ly = Math.max(2 * dp, y - 21 * dp);
+boxCtx.fillStyle = 'rgba(8,10,13,.74)';
+boxCtx.fillRect(x, ly, lw + 16 * dp, 18 * dp);
+boxCtx.fillStyle = text;
+boxCtx.fillText(label, x + 8 * dp, ly + 13 * dp);
+}
+boxCtx.restore();
+}
+function drawBox(){
+boxRaf = requestAnimationFrame(drawBox);
+if (!stage || !boxCtx) return;
+const r = stage.getBoundingClientRect(), dp = Math.min(2, devicePixelRatio || 1);
+const w = Math.max(1, Math.round(r.width * dp)), h = Math.max(1, Math.round(r.height * dp));
+if (boxEl.width !== w || boxEl.height !== h) { boxEl.width = w; boxEl.height = h; }
+boxCtx.clearRect(0, 0, w, h);
+let main = null;
+const lm = HANDS.lm;
+if (lm && lm.length >= 21 && HANDS.present) {
+main = handRect(lm, r);
+main.label = '手 · ' + Math.round((HANDS.score || 0) * 100) + '%';
+} else if (HANDS.src === 'motion' && HANDS.present) {
+const cx0 = (0.5 + (HANDS.x - 300) / 520) * r.width;
+const cy0 = (0.5 + (HANDS.y - 300) / 380) * r.height;
+main = { tx: cx0 - 75, ty: cy0 - 86, tw: 150, th: 172, label: '运动 · 降级' };
+}
+if (!main) { bS.on = false; bS2.on = false; return; }
+boxTrack(bS, main);
+let second = null;
+const lm2 = HANDS.lm2;
+if (lm2 && lm2.length >= 21) { second = handRect(lm2, r); second.label = '副手'; }
+if (second) boxTrack(bS2, second); else bS2.on = false;
+if (second) {
+const pc = boxCenter(bS, dp), qc = boxCenter(bS2, dp);
+boxCtx.save();
+boxCtx.setLineDash([6 * dp, 6 * dp]);
+boxCtx.strokeStyle = 'rgba(255,214,150,.5)';
+boxCtx.lineWidth = 1.2 * dp;
+boxCtx.beginPath(); boxCtx.moveTo(pc.x, pc.y); boxCtx.lineTo(qc.x, qc.y); boxCtx.stroke();
+boxCtx.restore();
+}
+drawBoxShape(bS, dp, main.label, false);
+if (second) drawBoxShape(bS2, dp, second.label, true);
+}
+let drag = false;
+if (stage) {
+stage.addEventListener('pointerdown', e => { if (e.button !== 0) return; if (e.target.closest('button, a, input')) return; drag = true; });
+addEventListener('pointerup', () => { drag = false; });
+stage.addEventListener('pointermove', e => {
+if (HANDS.src === 'landmark' || HANDS.src === 'motion') return;   // 真手势在跑时不抢
+if (!drag) return;
+const r = stage.getBoundingClientRect();
+const c = stage.querySelector('.stage-center').getBoundingClientRect();
+const u = c.width / 600;
+HANDS.tx = ((e.clientX - r.left) - (c.left - r.left) - c.width / 2) / u + 300;
+HANDS.ty = ((e.clientY - r.top) - (c.top - r.top) - c.height / 2) / u + 300;
+HANDS.present = true; HANDS.active = true;
+});
+addEventListener('pointerup', () => {
+if (HANDS.src) return;
+HANDS.present = false;
+HANDS.tx = 300; HANDS.ty = 300;
+});
+addEventListener('keydown', e => {
+if (e.target && /input|textarea/i.test(e.target.tagName)) return;
+if (!sec.classList.contains('on')) return;
+const k = e.key.toLowerCase();
+if (e.key === 'Escape' && HANDS.state !== 'off') { e.preventDefault(); closeHands(); return; }
+if (e.code === 'Space') { e.preventDefault(); HANDS.burst = 1; HANDS.active = true; }
+else if (k === 'shift') HANDS.pin = 1;
+else if (!e.repeat && (k === 'a' || k === 'd')) { e.preventDefault(); swipe(k === 'a' ? -1 : 1); }
+else if (k === 'w' || k === 's') { e.preventDefault(); HANDS.man.depth = k === 'w' ? 1 : -1; }
+else if (k === 'f') { HANDS.man.fist = 1; HANDS.active = true; }
+else if (k === 'q' || k === 'e') { HANDS.man.swirl = k === 'q' ? -0.9 : 0.9; HANDS.active = true; }
+else if (k === 'b') { HANDS.man.bridge = 1; HANDS.active = true; }
+});
+addEventListener('keyup', e => {
+const k = e.key.toLowerCase();
+if (k === 'shift' && !HANDS.src) HANDS.pin = 0;
+if (k === 'w' || k === 's') HANDS.man.depth = 0;
+if (k === 'f') HANDS.man.fist = 0;
+if (k === 'q' || k === 'e') HANDS.man.swirl = 0;
+if (k === 'b') HANDS.man.bridge = 0;
+});
+stage.addEventListener('dblclick', e => { if (e.target.closest('button, a, input')) return; HANDS.burst = 1; });
+}
+const OE = {
+x: { v: 300, d: 0 }, y: { v: 300, d: 0 },
+step: function (st, target, dt, minCut, beta) {
+dt = Math.max(1e-3, Math.min(0.1, dt));
+const raw = (target - st.v) / dt;
+const ad = 1 / (1 + 1 / (2 * Math.PI * 1.0 * dt));
+st.d += (raw - st.d) * ad;
+const cut = minCut + beta * Math.abs(st.d);
+const a = 1 / (1 + 1 / (2 * Math.PI * cut * dt));
+st.v += (target - st.v) * a;
+return st.v;
+}
+};
+const dz = (v, t) => (Math.abs(v) < t ? 0 : (v - Math.sign(v) * t) / (1 - t));
+window.__handsTick = function (dt) {
+const nowS = performance.now() / 1000;
+const dts = Math.max(1e-3, Math.min(0.12, nowS - (OE.t || nowS - dt || 0.016)));
+OE.t = nowS;
+if (OE.lx == null) { OE.lx = HANDS.tx; OE.ly = HANDS.ty; }
+const vTxN = (HANDS.tx - OE.lx) / dts, vTyN = (HANDS.ty - OE.ly) / dts;
+OE.lx = HANDS.tx; OE.ly = HANDS.ty;
+const ka = Math.min(1, dts * 14);
+OE.vxN = (OE.vxN || 0) + (vTxN - (OE.vxN || 0)) * ka;
+OE.vyN = (OE.vyN || 0) + (vTyN - (OE.vyN || 0)) * ka;
+const LEAP = 0.04;
+const pTx = HANDS.tx + Math.max(-46, Math.min(46, OE.vxN * LEAP));
+const pTy = HANDS.ty + Math.max(-46, Math.min(46, OE.vyN * LEAP));
+HANDS.x = OE.step(OE.x, pTx, dt, 3.2, 0.12);
+HANDS.y = OE.step(OE.y, pTy, dt, 3.2, 0.12);
+const kp = 1 - Math.exp(-dt / 0.09);
+HANDS.pinch += (HANDS.pin - HANDS.pinch) * kp;
+const m = HANDS.man;
+const fist = Math.max(HANDS.fistRaw, m.fist), bridge = Math.max(HANDS.bridgeRaw, m.bridge);
+const swirl = Math.abs(m.swirl) > Math.abs(HANDS.swirlRaw) ? m.swirl : HANDS.swirlRaw;
+const depth = m.depth || HANDS.depthRaw;
+const kf = 1 - Math.exp(-dt / 0.10);
+HANDS.fist += (fist - HANDS.fist) * kf;
+HANDS.bridge += (bridge - HANDS.bridge) * kf;
+HANDS.swirl += (dz(swirl, 0.34) * 0.8 - HANDS.swirl) * (1 - Math.exp(-dt / 0.16));
+HANDS.depth += (dz(depth, 0.40) * 0.75 - HANDS.depth) * (1 - Math.exp(-dt / 0.18));
+if (m.bridge && !HANDS.bridgeRaw) {                 /* 键盘桥接：从舞台中心连到指针处 */
+HANDS.bp.x1 = 300; HANDS.bp.y1 = 300;
+HANDS.bp.x2 = HANDS.x; HANDS.bp.y2 = HANDS.y;
+}
+if (HANDS.burst > 0) HANDS.burst = Math.max(0, HANDS.burst - dt / 1.2);
+if ((__handsTick.n = (__handsTick.n || 0) + 1) % 4 === 0) ui();
+};
+window.__conceptHands.debug = function (nx, ny, pinch, open, burst) {
+HANDS.tx = 300 + (0.5 - nx) * 520;
+HANDS.ty = 300 + (ny - 0.5) * 380;
+HANDS.pin = Math.max(0, Math.min(1, +pinch || 0));
+HANDS.open = Math.max(0, Math.min(1, +open || 0));
+if (burst) HANDS.burst = 1;
+HANDS.present = true; HANDS.active = true;
+HANDS.src = 'debug';
+if (HANDS.state === 'off' || HANDS.state === 'fallback') HANDS.state = 'live';
+HANDS.delegate = HANDS.delegate || '模拟';
+ui();
+return { state: HANDS.state, x: HANDS.x, y: HANDS.y, pinch: HANDS.pinch, burst: HANDS.burst };
+};
+window.__conceptHands.sim = function (o) {
+o = o || {};
+['fist', 'swirl', 'depth'].forEach(k => {
+if (k in o) { HANDS[k + 'Raw'] = Math.max(-1, Math.min(1, +o[k] || 0)); HANDS.active = true; }
+});
+if ('bridge' in o) {
+HANDS.bridgeRaw = Math.max(0, Math.min(1, +o.bridge || 0));
+HANDS.active = true;
+if (o.p1) { HANDS.bp.x1 = o.p1[0]; HANDS.bp.y1 = o.p1[1]; }
+if (o.p2) { HANDS.bp.x2 = o.p2[0]; HANDS.bp.y2 = o.p2[1]; }
+HANDS.gesture = HANDS.bridgeRaw > 0.05 ? '桥接' : HANDS.gesture;
+}
+if ('gesture' in o) HANDS.gesture = o.gesture;
+else if (HANDS.bridgeRaw > 0.05) HANDS.gesture = '桥接';
+else if (HANDS.fistRaw > 0.4) HANDS.gesture = '熄灭';
+else if (Math.abs(HANDS.swirlRaw) > 0.4) HANDS.gesture = '旋涡';
+else if (Math.abs(HANDS.depthRaw) > 0.4) HANDS.gesture = HANDS.depthRaw < 0 ? '拉近' : '推远';
+if (o.two) {
+const mk = (cx, cy, w) => {
+const lm = [];
+for (let i = 0; i < 21; i++) lm.push({ x: cx, y: cy, z: 0 });
+lm[0].x = cx; lm[0].y = cy + w * 0.9;
+[5, 9, 13, 17].forEach((j, n) => { lm[j].x = cx + (n - 1.5) * w * 0.32; lm[j].y = cy + w * 0.32; });
+[8, 12, 16, 20].forEach((j, n) => { lm[j].x = cx + (n - 1) * w * 0.30; lm[j].y = cy - w * 1.05; });
+lm[4].x = cx - w * 0.30; lm[4].y = cy - w * 0.85;
+lm[8].x = lm[4].x + 0.80 * w; lm[8].y = cy - w * 1.10;
+return lm;
+};
+HANDS.lm = mk(+o.h1x || 0.34, +o.h1y || 0.55, 0.15);
+HANDS.lm2 = mk(+o.h2x || 0.67, +o.h2y || 0.60, 0.12);
+HANDS.score = 0.97;
+HANDS.bridgeRaw = 1; HANDS.gesture = '桥接';
+}
+HANDS.present = true; HANDS.active = true; HANDS.src = 'debug';
+if (HANDS.state === 'off' || HANDS.state === 'fallback') HANDS.state = 'live';
+HANDS.delegate = HANDS.delegate || '模拟';
+ui();
+return { fist: HANDS.fist, swirl: HANDS.swirl, depth: HANDS.depth, bridge: HANDS.bridge };
+};
+window.__conceptHands.idle = function () { HANDS.present = false; HANDS.pin = 0; HANDS.burst = 0; HANDS.tx = 300; HANDS.ty = 300; HANDS.src = 'debug'; HANDS.state = 'live'; HANDS.delegate = HANDS.delegate || '模拟'; ui(); };
+window.__conceptHands.boxes = function (on) {
+if (on) { sec.dataset.cam = 'on'; document.body.classList.add('hands-cam'); startBox(); }
+else closeCam();
+return { cam: sec.dataset.cam || '', on: !!boxRaf };
+};
+window.__conceptHands.feed = function (w, cx, cy, fist) {
+const lm = [];
+const W = Math.max(0.01, +w || 0.12), X0 = cx === undefined ? 0.5 : cx, Y0 = cy === undefined ? 0.55 : cy;
+for (let i = 0; i < 21; i++) lm.push({ x: X0, y: Y0, z: 0 });
+lm[0].x = X0; lm[0].y = Y0 + W * 0.9;                       // 腕
+[5, 9, 13, 17].forEach((j, n) => { lm[j].x = X0 + (n - 1.5) * W * 0.32; lm[j].y = Y0 + W * 0.32; });
+const tip = fist === undefined ? 0.55 : +fist;
+[12, 16, 20].forEach((j, n) => { lm[j].x = X0 + (n - 1) * W * 0.30 * tip; lm[j].y = Y0 - W * 1.1 * tip; });
+lm[4].x = X0 - W * 0.30; lm[4].y = Y0 - W * 0.90 * tip;         // 拇指尖
+lm[8].x = lm[4].x + (0.06 + 0.78 * tip) * W; lm[8].y = Y0 - W * 1.15 * tip;  // 食指尖
+debugHold = 0;
+ingestAll([lm]);
+debugHold = performance.now() + 1200;
+return { wid: HANDS.nearWid, present: HANDS.present, handsN: HANDS.handsN, gesture: HANDS.gesture };
+};
+window.__conceptHands.tourState = function () {
+const all = {};
+TOUR.forEach(s => { all[s.k] = tourTest(s.k); });
+return { on: tourOn, i: tourI, hold: +tourHold.toFixed(2), seen: !!localStorage.getItem(TOUR_KEY),
+present: HANDS.present, x: Math.round(HANDS.x), y: Math.round(HANDS.y),
+pin: +HANDS.pin.toFixed(2), fist: +HANDS.fist.toFixed(2), all: all };
+};
+})();
 const PAIRS = {
 'ball|storm':        ['雷暴', '球状闪电', '【强共振 · 起点触发】自然雷暴中电荷分离诱发高能激发态；主角由此目击超常物理现象，开启终身研究。'],
 'ball|macro':        ['球状闪电', '宏电子', '【强共振 · 实体本质】球状闪电被重构为宏观尺度电子的激发态；自此从不可捉摸的谜题转入可收集、储存的人工物理工程。'],
@@ -5562,8 +6323,9 @@ if (back) back.addEventListener('click', closeQuiz);
 addEventListener('keydown', e => {
 if (e.key !== 'Escape') return;
 const box = document.getElementById('labQuiz');
-if (box && !box.hidden) closeQuiz();
-});
+if (box && !box.hidden) { closeQuiz(); return; }
+if (state.on) setMode(false);
+}, true);
 })();
 function setMode(on) {
 if (!on) { closeQuiz(); fxStop(); gamePause(); quizTimerStop(); miniPause(); }
@@ -5577,9 +6339,9 @@ if (switchEl) {
 switchEl.querySelectorAll('[data-mode]').forEach(b => b.setAttribute('aria-current', String((b.dataset.mode === 'lab') === on)));
 }
 if (on) {
-openQuiz();
 renderPalette(); renderConsole(); renderLog(); renderQuest();
 if (!state.nodes.length) setTask(state.task);
+openQuiz();
 requestAnimationFrame(() => { draw(); fxResize(); fxStart(); gameResume(); });
 }
 }
@@ -5588,6 +6350,165 @@ const b = e.target.closest('[data-mode]');
 if (!b) return;
 setMode(b.dataset.mode === 'lab');
 });
+['labTasks', 'lab', 'labEntries'].forEach(id => {
+const el = document.getElementById(id);
+if (el) { el.style.display = 'none'; el.setAttribute('hidden', ''); }
+});
+(function labFlow(){
+const con = document.getElementById('concepts');
+if (!con || !switchEl) return;
+const pills = document.getElementById('arenaPills');
+const entries = document.getElementById('labEntries');
+let flow = document.getElementById('labFlow');
+if (!flow) {
+flow = document.createElement('div');
+flow.id = 'labFlow';
+flow.className = 'lab-flow';
+con.insertBefore(flow, switchEl);
+flow.appendChild(switchEl);
+if (pills) flow.appendChild(pills);
+}
+if (entries) entries.hidden = true;   /* 旧的重复入口不再出现 */
+if (pills) {
+const STEP = { 'quiz.html': '①', 'showcase.html': '②', 'arena.html': '③' };
+pills.querySelectorAll('a[data-lab]').forEach(a => {
+const s = STEP[a.getAttribute('data-lab')];
+if (s) a.setAttribute('data-step', s);
+});
+}
+(function handsPill(){
+if (!flow) return;
+const btn = document.createElement('button');
+btn.id = 'handsPill';
+btn.className = 'hands-pill';
+btn.type = 'button';
+btn.setAttribute('aria-pressed', 'false');
+btn.innerHTML = '<i></i><span>手势</span>';
+flow.appendChild(btn);
+btn.addEventListener('click', () => {
+const t = document.getElementById('handsToggle');
+if (t) t.click();
+});
+const sync = () => {
+const out = document.getElementById('handsOut');
+const st = (out && out.textContent || '').trim();
+const live = /就绪|live/i.test(st);
+const fallback = /降级|fallback/i.test(st);
+btn.setAttribute('data-state', live ? 'live' : fallback ? 'fallback' : 'off');
+btn.setAttribute('aria-pressed', live || fallback ? 'true' : 'false');
+};
+const host = document.getElementById('tune');
+if (host) new MutationObserver(sync).observe(host, { subtree: true, childList: true, characterData: true });
+setInterval(sync, 600);
+sync();
+})();
+const map = { 'quiz.html': 'quiz.html', 'showcase.html': 'showcase.html', 'arena.html': 'arena.html' };
+const QUIZ_PORTRAIT = { dingyi: 'ding', linyun: 'lin', zhangbin: 'zhang', observer: 'main' };
+function sendPortraits(){
+const f = quizFrame();
+if (!f || !f.contentWindow || typeof PORTRAITS === 'undefined') return;
+const map = {};
+Object.keys(QUIZ_PORTRAIT).forEach(k => {
+const src = PORTRAITS[QUIZ_PORTRAIT[k]];
+if (src) map[k] = src;
+});
+try { f.contentWindow.postMessage({ type: 'bl:portraits', map: map }, '*'); } catch (err) {}
+}
+addEventListener('message', ev => {
+if (ev.data && ev.data.type === 'bl:quiz:ready') sendPortraits();
+});
+(function hookQuizLoad(){
+const f = quizFrame();
+if (!f) return;
+f.addEventListener('load', () => setTimeout(sendPortraits, 120));
+if (f.getAttribute('src')) setTimeout(sendPortraits, 400);
+})();
+function openLabPage(file){
+const f = quizFrame(), box = document.getElementById('labQuiz');
+if (!f || !box) return;
+try { f.src = labBase() + file; } catch (err) {}
+box.hidden = false;
+con.classList.add('quiz-on');
+if (/^quiz\.html/.test(file)) setTimeout(sendPortraits, 700);
+}
+function enter(file){
+setMode(true);
+openLabPage(file || 'quiz.html');
+}
+let quizBranch = '';
+let quizWent = false;
+function toArmory(branch) {
+if (branch) quizBranch = branch;
+if (quizWent) return;
+quizWent = true;
+markStep('showcase.html');
+openLabPage('showcase.html' + (quizBranch ? '?b=' + quizBranch : ''));
+}
+function markStep(lab) {
+if (!pills) return;
+pills.querySelectorAll('a[data-lab]').forEach(x => x.classList.toggle('on', x.getAttribute('data-lab') === lab));
+}
+addEventListener('message', ev => {
+const d = ev.data;
+if (!d || typeof d !== 'object') return;
+if (d.type === 'bl:quiz:enter') { toArmory(d.branch); }
+else if (d.type === 'bl:quiz:done') {
+quizBranch = d.branch || '';
+setTimeout(() => toArmory(quizBranch), 2600);
+}
+});
+if (pills) pills.addEventListener('click', e => {
+const a = e.target.closest('a[data-lab]');
+if (!a) return;
+e.preventDefault();
+const file = map[a.getAttribute('data-lab')] || 'quiz.html';
+if (file === 'quiz.html') quizWent = false;
+enter(file);
+pills.querySelectorAll('a[data-lab]').forEach(x => x.classList.toggle('on', x === a));
+});
+new MutationObserver(() => {
+if (!con.classList.contains('on') && state.on) setMode(false);
+}).observe(con, { attributes: true, attributeFilter: ['class'] });
+function audit() {
+const bad = [];
+const flowEl = document.getElementById('labFlow');
+const pillsEl = document.getElementById('arenaPills');
+const swEl = document.getElementById('labSwitch');
+if (!flowEl) bad.push('缺 #labFlow');
+if (!pillsEl) bad.push('缺 #arenaPills');
+if (!swEl) bad.push('缺 #labSwitch');
+if (flowEl && pillsEl && !flowEl.contains(pillsEl)) bad.push('#arenaPills 不在 #labFlow 里');
+if (swEl) {
+const modes = Array.from(swEl.querySelectorAll('[data-mode]')).map(b => b.dataset.mode);
+if (modes.join(',') !== 'rel,lab') bad.push('模式开关不是 rel,lab');
+}
+if (pillsEl) {
+const steps = Array.from(pillsEl.querySelectorAll('a[data-lab]')).map(a2 => a2.dataset.step);
+if (steps.join('') !== '①②③') bad.push('三个入口没有 ①②③ 序号');
+}
+const relMode = !con.classList.contains('lab-on');
+if (relMode && flowEl && getComputedStyle(flowEl).display === 'none') bad.push('关系模式下工作流条被隐藏（入口会消失）');
+if (relMode && pillsEl && getComputedStyle(pillsEl).display !== 'none') bad.push('关系模式下三个入口不该出现');
+const ok = bad.length === 0;
+if (!ok) console.error('[02 contract] 实验模式工作流被改坏了：' + bad.join('；') + '（见 docs/02-实验模式工作流.md）');
+return { ok: ok, problems: bad, mode: relMode ? 'rel' : 'lab' };
+}
+window.__labFlowAudit = audit;
+setTimeout(audit, 600);
+})();
+(function comboGlow(){
+const box = document.getElementById('combo');
+if (!box) return;
+const slots = box.querySelectorAll('.slot');
+const sync = () => {
+let full = 0;
+slots.forEach(s => { if (s.classList.contains('full')) full++; });
+box.dataset.full = full >= 2 ? '1' : '0';
+};
+const mo = new MutationObserver(sync);
+slots.forEach(s => mo.observe(s, { attributes: true, attributeFilter: ['class'] }));
+sync();
+})();
 addEventListener('resize', () => { if (state.on) { draw(); fxResize(); } });
 document.addEventListener('visibilitychange', () => {
 if (document.hidden) { fxStop(); gamePause(); } else { fxStart(); gameResume(); }
@@ -6865,9 +7786,40 @@ try { gl = cv.getContext('webgl', { alpha: true, premultipliedAlpha: true, antia
 const c2 = gl ? null : cv.getContext('2d');
 if (!gl) N = Math.min(N, 5000);
 const F = n => new Float32Array(n);
+const FG = 33, FGS = (FG - 1) / 600, FL = F(FG * FG * 2);
+let flowT = -9, flowOn = false;
+function buildFlow(t) {
+if (t - flowT < 1 / 40) return;
+flowT = t;
+for (let j = 0; j < FG; j++) {
+const y = j / (FG - 1) * 600;
+for (let i = 0; i < FG; i++) {
+const x = i / (FG - 1) * 600;
+let vx = 0, vy = 0, ph;
+ph = 0.0052 * x + 0.0031 * y + 0.55 * t;              vx += 1.00 * 0.0031 * cos(ph); vy -= 1.00 * 0.0052 * cos(ph);
+ph = -0.0034 * x + 0.0072 * y - 0.41 * t + 2.1;       vx += 0.62 * 0.0072 * cos(ph); vy += 0.62 * 0.0034 * cos(ph);
+ph = 0.0091 * x - 0.0084 * y + 0.83 * t + 4.7;        vx -= 0.35 * 0.0084 * cos(ph); vy -= 0.35 * 0.0091 * cos(ph);
+const o = (j * FG + i) * 2;
+FL[o] = vx * 5200; FL[o + 1] = vy * 5200;
+}
+}
+}
+function flowAt(x, y, out) {
+let fx = x * FGS, fy = y * FGS;
+if (fx < 0) fx = 0; else if (fx > FG - 1.001) fx = FG - 1.001;
+if (fy < 0) fy = 0; else if (fy > FG - 1.001) fy = FG - 1.001;
+const i0 = fx | 0, j0 = fy | 0, ux = fx - i0, uy = fy - j0;
+const o00 = (j0 * FG + i0) * 2, o10 = o00 + 2, o01 = o00 + FG * 2, o11 = o01 + 2;
+const w00 = (1 - ux) * (1 - uy), w10 = ux * (1 - uy), w01 = (1 - ux) * uy, w11 = ux * uy;
+out[0] = FL[o00] * w00 + FL[o10] * w10 + FL[o01] * w01 + FL[o11] * w11;
+out[1] = FL[o00 + 1] * w00 + FL[o10 + 1] * w10 + FL[o01 + 1] * w01 + FL[o11 + 1] * w11;
+}
+const flowOut = [0, 0];
 const X = F(MAX), Y = F(MAX), SA = F(MAX), SB = F(MAX), SC = F(MAX), GX = F(MAX), GY = F(MAX);
 const TX = F(MAX), TY = F(MAX), TS = F(MAX), TR = F(MAX), TG = F(MAX), TB = F(MAX), TA = F(MAX);
-const BUF = F(MAX * 7);
+const EN = F(MAX);
+const TF = F(MAX).fill(1);
+const BUF = F(MAX * 7), LBUF = F(MAX * 14);
 for (let i = 0; i < MAX; i++) {
 SA[i] = Math.random(); SB[i] = Math.random(); SC[i] = Math.random();
 const r = Math.sqrt(-2 * Math.log(Math.random() + 1e-9)), a = Math.random() * Math.PI * 2;
@@ -6876,8 +7828,34 @@ X[i] = 300 + GX[i] * 160; Y[i] = 300 + GY[i] * 160;
 }
 const TAU = Math.PI * 2, sin = Math.sin, cos = Math.cos, sqrt = Math.sqrt, abs = Math.abs;
 const hash = (i, k) => { const v = sin(i * 12.9898 + k * 78.233) * 43758.5453; return v - Math.floor(v); };
-function put(i, x, y, sz, r, g, b, a) {
+function put(i, x, y, sz, r, g, b, a, tf) {
 TX[i] = x; TY[i] = y; TS[i] = sz; TR[i] = r / 255; TG[i] = g / 255; TB[i] = b / 255; TA[i] = a;
+if (tf !== undefined) TF[i] = tf;
+}
+const IQP = [
+[[0.66, 0.52, 0.40], [0.34, 0.36, 0.30], [0.62, 0.58, 0.52], [0.00, 0.10, 0.22]],
+[[0.48, 0.60, 0.72], [0.34, 0.30, 0.24], [0.55, 0.62, 0.68], [0.02, 0.18, 0.34]],
+[[0.40, 0.56, 0.70], [0.30, 0.34, 0.30], [0.72, 0.66, 0.58], [0.10, 0.26, 0.42]]
+];
+const IQT = [0, 0, 0];
+function iqCol(u, pal) {
+const P = IQP[pal || 0], t = u < 0 ? 0 : u > 1 ? 1 : u;
+for (let k = 0; k < 3; k++) {
+const p = P[k];
+IQT[k] = 255 * (p[0] + p[1] * cos(TAU * (p[2] * t + p[3])));
+}
+return IQT;
+}
+function put3D(i, x3, y3, z3, rx, ry, sz, r, g, b, a, tf) {
+const cy = cos(ry), sy = sin(ry), cx = cos(rx), sx = sin(rx);
+const x1 = x3 * cy + z3 * sy, z1 = -x3 * sy + z3 * cy;
+const y2 = y3 * cx - z1 * sx, z2 = y3 * sx + z1 * cx;
+const persp = 540 / Math.max(180, 540 - z2);
+const dep = Math.max(0.32, Math.min(1.5, (z2 + 240) / 360));
+const halo = (i % 21) === 0, mid = (i % 6) === 0;
+const s2 = (halo ? 3.0 : (mid ? 1.35 : 0.66)) * sz;
+const a2 = Math.min(1, (halo ? a * 0.17 : a) * dep);
+put(i, 300 + x1 * persp, 300 + y2 * persp, s2 * persp, r, g, b, a2, tf);
 }
 const S = { t: 0, px: null, py: null, near: 0, obs: 0, look: 0, lobe: 268, bolt: null, branch: null, boltK: -1, sceneT: 0 };
 function jag(x1, y1, x2, y2, amp, depth) {
@@ -6905,191 +7883,327 @@ const d = Math.hypot(S.px - 300, S.py - 300);
 return d < r ? 1 : 0;
 }
 const SCN = {
-storm: { follow: 0.3, repel: true, hint: '负电荷层与正电荷层不断积累，然后一次放电。移动鼠标可以拨开粒子。', f(t) {
+storm: { follow: 0.3, repel: true, hint: '负电荷层与正电荷层不断积累，然后一次放电。移动鼠标可以拨开粒子。', trail: 0.5, f(t) {
 const cyc = 2.6, k = Math.floor(t / cyc), ph = t - k * cyc;
-if (k !== S.boltK) {
-S.boltK = k;
-const x0 = 170 + Math.random() * 260, x1 = x0 + (Math.random() - 0.5) * 160;
-S.bolt = jag(x0, 150, x1, 450, 70, 6);
-const p = along(S.bolt, 0.35 + Math.random() * 0.2);
-S.branch = jag(p[0], p[1], p[0] + (Math.random() < 0.5 ? -1 : 1) * (60 + Math.random() * 80), p[1] + 70 + Math.random() * 60, 30, 4);
-}
-const vis = ph < 0.07 ? 1 : ph < 0.13 ? 0.25 : ph < 0.2 ? 0.95 : ph < 0.5 ? Math.max(0, 1 - (ph - 0.2) / 0.3) : 0;
-const flash = vis * 0.5;
-for (let i = 0; i < N; i++) {
-const a = SA[i], b = SB[i], c = SC[i], role = i % 10;
-if (role === 9 && vis > 0.02) {
-const p = b < 0.28 ? along(S.branch, a) : along(S.bolt, a);
-put(i, p[0] + GX[i] * 1.6, p[1] + GY[i] * 1.6, 2.1 + vis, 230, 240, 255, 0.9 * vis);
-continue;
-}
-if (role === 8) {
-const y = ((b * 640 + t * (380 + c * 260)) % 640) - 20;
-put(i, a * 680 - 40 - y * 0.12, y, 0.9, 150, 175, 230, 0.16 + flash * 0.3);
-continue;
-}
-const top = role < 4 || (role === 9 && b < 0.5);
-const yb = top ? 150 : 450;
-const x = 80 + a * 440 + sin(t * 0.7 + b * 20) * 6;
-const y = yb + GY[i] * 7 + sin(t * 2.3 + a * 30) * 3;
-if (top) put(i, x, y, 1.15, 120, 150, 255, 0.34 + flash);
-else put(i, x, y, 1.15, 255, 165, 110, 0.32 + flash);
-}
-} },
-ball: { follow: 0.2, repel: true, hint: '高温发光的核心、旋转的外壳、不断甩出的火花。移动鼠标可以拨开粒子。', f(t) {
-const ox = 300 + sin(t * 0.4) * 34, oy = 300 + sin(t * 0.53) * 22;
-for (let i = 0; i < N; i++) {
-const a = SA[i], b = SB[i], c = SC[i], role = i % 20;
-if (role < 11) {
-const r = 74 * Math.pow(b, 0.55), th = a * TAU + t * (0.9 / (0.25 + b)), ph = Math.acos(2 * c - 1);
-const pul = 1 + sin(t * 3 + b * 6) * 0.04, hot = 1 - b;
-const z = r * Math.sin(ph) * sin(th);
-put(i, ox + r * Math.sin(ph) * cos(th) * pul, oy + r * cos(ph) * pul, 1.1 + hot * 2.1,
-255, 160 + hot * 90, 90 + hot * 150, 0.22 + hot * 0.48 + z / 74 * 0.08);
-} else if (role < 17) {
-const ring = role < 14 ? 0 : 1, R = (ring ? 170 : 118) + (b - 0.5) * 6, tilt = ring ? 1.15 : 0.5;
-const th = a * TAU + t * (ring ? -0.25 : 0.4);
-const x3 = cos(th) * R, z3 = sin(th) * R, y3 = z3 * sin(tilt), zz = z3 * cos(tilt);
-const rot = ring ? 0.6 : -0.3;
-put(i, ox + x3 * cos(rot) - y3 * sin(rot), oy + x3 * sin(rot) + y3 * cos(rot), zz > 0 ? 1.5 : 1,
-150, 175, 255, 0.2 + (zz / R) * 0.12);
-} else {
-const life = (t * 0.55 + a) % 1, ang = b * TAU + sin(t + c * 9) * 0.3, d = 72 + life * (150 + c * 120);
-put(i, ox + cos(ang) * d, oy + sin(ang) * d - life * life * 30, 1.8 * (1 - life) + 0.4, 255, 215, 150, (1 - life) * 0.8);
-}
-}
-} },
-macro: { follow: 0.2, repel: true, hint: '左边是普通电子，右边是放大 10¹⁴ 倍的宏电子：越大，波的形态越明显。', f(t) {
-for (let i = 0; i < N; i++) {
-const a = SA[i], b = SB[i], c = SC[i], role = i % 25;
-if (role < 2) put(i, 170 + GX[i] * 4, 310 + GY[i] * 4, 1.4, 230, 235, 255, 0.7);
-else if (role < 16) {
-const th = a * TAU + t * 0.35 * (b < 0.5 ? 1 : -1);
-const rr = 98 * (0.22 + 0.78 * sqrt(b)) + cos(th * 5 - t * 2.2) * 10 * b;
-put(i, 430 + cos(th) * rr, 310 + sin(th) * rr, 1.1 + (1 - b) * 1.2, 140, 160, 255, 0.2 + (1 - b) * 0.3);
-} else {
-const life = (t * 0.3 + a) % 1, amp = life * life * 62;
-put(i, 178 + life * 236, 310 + sin(life * 18 - t * 4 + b * TAU) * amp * c, 0.8 + life * 1.8,
-190, 200, 255, 0.12 + 0.5 * sin(life * Math.PI));
-}
-}
-} },
-nucleus: { follow: 0.22, repel: true, hint: '宏原子：中间是宏原子核，三条轨道上的宏电子拖着尾巴绕行。', f(t) {
-for (let i = 0; i < N; i++) {
-const a = SA[i], b = SB[i], c = SC[i], role = i % 10;
-if (role < 2) {
-const br = 1 + sin(t * 2.2) * 0.08, sw = t * 0.6;
-const x = GX[i] * 17 * br, y = GY[i] * 17 * br;
-put(i, 300 + x * cos(sw) - y * sin(sw), 300 + x * sin(sw) + y * cos(sw), 1.6, 255, 215, 170, 0.5);
-} else {
-const ring = i % 3, trail = b * b;
-const ang = t * (0.9 + ring * 0.35) + ring * 2 - trail * 2.8;
-const R = 125 + ring * 22 + (c - 0.5) * 4, incl = 1.2, rot = ring * 2.1;
-const x3 = cos(ang) * R, y3 = sin(ang) * R * cos(incl), z3 = sin(ang) * R * sin(incl);
-const head = Math.pow(1 - trail, 3);
-put(i, 300 + x3 * cos(rot) - y3 * sin(rot), 300 + x3 * sin(rot) + y3 * cos(rot),
-1 + Math.pow(1 - trail, 6) * 2.6, 150, 180, 255, (0.05 + 0.7 * head) * (z3 > 0 ? 1 : 0.55));
-}
-}
-} },
-bubble: { follow: 0.2, repel: true, hint: '空泡：一层透明的壳，只有边缘看得见。壳上有缓慢的涟漪。', f(t) {
-const ry = t * 0.25, rx = 0.35;
-for (let i = 0; i < N; i++) {
-const a = SA[i], b = SB[i], c = SC[i], role = i % 20;
-if (role < 16) {
-const th = a * TAU, ph = Math.acos(2 * b - 1), R = 150 + sin(ph * 7 - t * 2.5) * 3.5;
-let x = R * Math.sin(ph) * cos(th), y = R * cos(ph), z = R * Math.sin(ph) * sin(th);
-const x2 = x * cos(ry) + z * sin(ry), z2 = -x * sin(ry) + z * cos(ry);
-const y2 = y * cos(rx) - z2 * sin(rx), z3 = y * sin(rx) + z2 * cos(rx);
-const rim = Math.pow(1 - abs(z3) / R, 2);
-put(i, 300 + x2, 300 + y2, 1.1, 170, 215, 255, 0.03 + rim * 0.5);
-} else if (role < 19) {
-const r = 86 * sqrt(c), th = a * TAU + t * (0.5 / (0.3 + c));
-put(i, 300 + cos(th) * r, 300 + sin(th) * r * 0.9, 1, 160, 190, 255, 0.14);
-} else put(i, 300 + GX[i] * 10, 300 + GY[i] * 10, 1.6, 240, 245, 255, 0.6);
-}
-} },
-quantum: { follow: 0.5, repel: false, hint: '没人看时，它同时在两处（概率云）。把鼠标移到中间 = 观察，它坍缩到其中一处。', f(t, dt) {
-const want = S.px != null ? nearness(230) : ((t % 7) > 5.2 ? 1 : 0);
-if (want && S.obs < 0.05) S.lobe = Math.random() < 0.5 ? 268 : 332;
-S.obs += (want - S.obs) * Math.min(1, dt * 5);
-const o = S.obs;
-for (let i = 0; i < N; i++) {
-const k = Math.floor(t * 7 + SA[i] * 7);
-const h1 = hash(i, k), h2 = hash(i + 7.3, k), h3 = hash(i + 3.1, k);
-const rad = sqrt(-2 * Math.log(h1 + 1e-6)) * 34, ang = h2 * TAU, lobe = h3 < 0.5 ? 268 : 332;
-const x0 = lobe + cos(ang) * rad, y0 = 300 + sin(ang) * rad;
-const x1 = S.lobe + GX[i] * 3, y1 = 300 + GY[i] * 3;
-put(i, x0 + (x1 - x0) * o, y0 + (y1 - y0) * o, 1.1 + o * 0.8,
-130 + 110 * o, 150 + 95 * o, 255, 0.3 + o * 0.35);
-}
-} },
-transition: { follow: 0.3, repel: true, hint: '粒子在两个能级之间瞬移，中间不经过；虚线上流动的光点是"我们眼中的连续轨迹"。', f(t) {
-for (let i = 0; i < N; i++) {
-const a = SA[i], b = SB[i], c = SC[i], role = i % 10;
-if (role < 7) {
-const p = (t * 0.22 + a) % 1, lvl = p < 0.5 ? 0 : 1, fl = Math.max(0, 1 - (p % 0.5) / 0.06);
-const cx = lvl ? 430 : 170, th = b * TAU + t * 1.5, R = 34 + (c - 0.5) * 8;
-if (lvl) put(i, cx + cos(th) * R, 300 + sin(th) * R, 1.2 + fl * 2, 255, 190, 130, 0.32 + fl * 0.5);
-else put(i, cx + cos(th) * R, 300 + sin(th) * R, 1.2 + fl * 2, 150, 175, 255, 0.32 + fl * 0.5);
-} else if (role < 9) {
-put(i, 215 + ((t * 0.4 + a) % 1) * 170, 300 + (b - 0.5) * 4, 0.9, 235, 240, 255, 0.22);
-} else {
-const life = (t * 0.8 + a) % 1, side = Math.floor(t * 0.8 + a) % 2 ? 430 : 170, ang = b * TAU;
-put(i, side + cos(ang) * life * 120, 300 + sin(ang) * life * 120, 1.2, 255, 230, 170, (1 - life) * 0.55);
-}
-}
-} },
-fusion: { follow: 0.25, repel: true, hint: '宏聚变：中心压缩、点燃，冲击波一格一格扫过，被扫到的单元先亮后熄。', f(t) {
-const ph = t % 6, R = Math.max(0, ph - 0.6) / 5.4 * 330;
+const strike = ph < 0.16 ? Math.pow(1 - ph / 0.16, 2) : 0;
+const rx = 0.16 + sin(t * 0.5) * 0.04, ry = t * 0.14;
 for (let i = 0; i < N; i++) {
 const a = SA[i], b = SB[i], c = SC[i], role = i % 20;
 if (role < 12) {
-const cell = i % 49, gx = 198 + (cell % 7) * 32, gy = 198 + Math.floor(cell / 7) * 32;
-const dx = gx - 300, dy = gy - 300, d = Math.hypot(dx, dy) || 1, hit = R - d;
-let x = gx + (a - 0.5) * 20, y = gy + (b - 0.5) * 20;
-if (R <= 0 || hit < 0) put(i, x, y, 1, 150, 170, 255, 0.22);
-else if (hit < 40) {
-const k = 1 - hit / 40;
-put(i, x + dx / d * hit * 0.5 * c, y + dy / d * hit * 0.5 * c, 1.2 + k * 1.6, 255, 190, 110, 0.3 + k * 0.6);
-} else put(i, x, y + Math.min(26, (hit - 40) * 0.3) * c, 0.9, 110, 110, 140, 0.08);
-} else if (role < 16) {
-const r = ph < 0.6 ? 42 * (1 - ph / 0.6 * 0.82) : 8 + (ph - 0.6) * 5;
-const hot = ph > 0.55 && ph < 1.1 ? 1 - abs(ph - 0.8) / 0.3 : 0;
-const th = a * TAU + t;
-put(i, 300 + cos(th) * (r + GX[i] * 2), 300 + sin(th) * (r + GY[i] * 2), 1.2 + hot * 2.4,
-200 + hot * 55, 200 + hot * 20, 255 - hot * 120, 0.3 + hot * 0.6);
+const lay = b * b, R = (30 + (1 - lay) * 118) * (0.86 + c * 0.22);
+const ang = a * TAU + t * (0.4 + lay * 0.9);
+const x3 = cos(ang) * R, z3 = sin(ang) * R;
+const y3 = -196 + lay * 132 - sin(ang * 3 + t) * 9;
+put3D(i, x3, y3, z3, rx, ry, 0.85 + c * 1.1,
+96 + strike * 150, 148 + c * 46 + strike * 95, 226 + strike * 26,
+0.10 + lay * 0.20 + strike * 0.35, 0.55);
+} else if (role < 17) {
+const br = role - 12, u = b;
+const jitter = sin(u * 26 + k * 4.1 + br * 2.3) * (10 + u * 26) + cos(u * 51 + k) * 5;
+const fork = br === 0 ? 0 : (br % 2 ? 1 : -1) * Math.max(0, u - 0.3) * (95 + br * 22);
+const alive = strike > 0.02 ? 0.45 + strike * 0.9 : 0.10 + 0.05 * sin(t * 7 + i);
+put3D(i, jitter + fork + (c - 0.5) * 4, -86 + u * 232, sin(u * 12 + k) * 18 + (a - 0.5) * 6,
+rx, ry, br === 0 ? 1.5 : 0.95,
+226 + strike * 29, 240 + strike * 15, 255,
+alive * (br === 0 ? 0.9 : 0.55), 0.06);
 } else {
-const r = R + (b - 0.5) * 6, th = a * TAU;
-put(i, 300 + cos(th) * r, 300 + sin(th) * r, 1.1, 255, 200, 140, R > 0 && R < 330 ? (1 - R / 330) * 0.6 : 0);
+const wave = (t * 0.55) % 1, R = (18 + wave * 150) * (0.94 + b * 0.12), ang = a * TAU - t * 0.3;
+put3D(i, cos(ang) * R, 148 + (c - 0.5) * 3, sin(ang) * R,
+rx, ry, 0.8 + (1 - wave) * 1.2,
+150 + strike * 90, 212 + strike * 38, 255,
+(1 - wave) * (0.22 + strike * 0.42), 0.18);
 }
 }
 } },
-observer: { follow: 0.22, repel: false, hint: '一条铺开的波。把鼠标移到中间 = 观察，波坍缩成一个点；移开，它又散回波。', f(t, dt) {
-const want = S.px != null ? nearness(230) : (((t % 7) > 4.6 && (t % 7) < 6.2) ? 1 : 0);
-S.obs += (want - S.obs) * Math.min(1, dt * 4);
-const o = S.obs;
+ball: { follow: 0.16, repel: true, hint: '高温发光的核心、旋转的外壳、不断甩出的火花。移动鼠标可以拨开粒子。', trail: 0.52, f(t, dt) {
+const breathe = 1 + sin(t * 1.7) * 0.028;
+const rx = 0.30 + sin(t * 0.42) * 0.30, ry = t * 0.26;
+const HB = window.__conceptHands;
+const rb = HB && HB.bridge > 0.06 && HB.bp;
+const RB_N = 7 * 256;
+let bx = 0, by = 0, bvx = 0, bvy = 0, bL = 1, bS = 0, bnx = 0, bny = 0, bux = 0, buy = 0;
+if (rb) {
+bx = HB.bp.x1; by = HB.bp.y1; bvx = HB.bp.x2 - bx; bvy = HB.bp.y2 - by;
+bL = sqrt(bvx * bvx + bvy * bvy) || 1;
+bux = bvx / bL; buy = bvy / bL; bnx = -buy; bny = bux;
+bS = Math.min(1, (HB.bridge - 0.05) / 0.6);
+}
 for (let i = 0; i < N; i++) {
-const x = 80 + SA[i] * 440, env = Math.exp(-Math.pow((x - 300) / 170, 2));
-const y = 300 - 34 * sin(Math.PI * (x - 80) / 68 - t * 2) * (0.55 + 0.45 * env) + (SB[i] - 0.5) * 10;
-const x1 = 300 + GX[i] * 2.5, y1 = 300 + GY[i] * 2.5;
-put(i, x + (x1 - x) * o, y + (y1 - y) * o, 1.1 + o * 0.7, 150 + 90 * o, 170 + 75 * o, 255, 0.26 + 0.3 * o);
+if (rb && i < RB_N) {
+const band = (i / 256) | 0, u = (i % 256) / 256;
+const bell = sin(u * Math.PI), ph = u * 5.6 + t * (1.2 + band * 0.15) + band * TAU / 7;
+const rr = (15 + 18 * bell) * (0.75 + 0.45 * bS);
+const cxu = bx + bvx * u, cyu = by + bvy * u, dep = sin(ph) * rr * 0.55, face = abs(cos(ph));
+put(i, cxu + bnx * cos(ph) * rr + bux * dep, cyu + bny * cos(ph) * rr + buy * dep,
+1.0 + face * 1.8, 185 + face * 55, 228 + face * 25, 255,
+(0.20 + face * 0.72) * bell * bS, 0.10);
+continue;
+}
+const a = SA[i], b = SB[i], c = SC[i], role = i % 30;
+if (role < 8) {
+const r = (15 + 38 * Math.pow(b, 0.6)) * breathe;
+const th = a * TAU + t * (1.8 / (0.35 + b)), ph2 = Math.acos(2 * c - 1), hot = 1 - b;
+put3D(i, r * sin(ph2) * cos(th), r * cos(ph2), r * sin(ph2) * sin(th), rx, ry,
+0.72 + hot * 1.1, 255, 214 - hot * 30, 168 + hot * 66, 0.13 + hot * 0.26, 0.04);
+} else if (role < 20) {
+const sid = i & 63;
+const sA = (sid * 0.6180339887) % 1;
+const sB = ((sid * 0.3819660113) + (i % 7) * 0.1428) % 1;
+const pr = (b + t * (0.24 + (sid % 5) * 0.035)) % 1;
+const fade = sin(pr * Math.PI);
+const R = (62 + 52 * sin(pr * Math.PI * 1.3 + sA * TAU)) * breathe;
+const th = sA * TAU + pr * 2.7 + sin(t * 0.8 + sB * TAU) * 0.5 + (c - 0.5) * 0.06;
+const ph2 = Math.acos(2 * sB - 1) + cos(pr * 4.2 + t * 0.65 + sA * TAU) * 0.40;
+const warm = Math.max(0, 1 - pr * 1.25);
+const QC = iqCol(0.22 + pr * 0.5, warm > 0.5 ? 0 : 1);
+put3D(i, R * sin(ph2) * cos(th), R * cos(ph2), R * sin(ph2) * sin(th), rx, ry,
+0.8 + fade * 1.1, QC[0], QC[1], QC[2],
+fade * (0.16 + 0.26 * (1 - c * 0.5)), 0.85);
+} else if (role < 26) {
+const k3 = (role - 20) % 3;
+const R = [120, 166, 210][k3] * breathe + (b - 0.5) * 4;
+const tilt = [0.48, 1.12, 1.68][k3], spd = [0.62, -0.44, 0.30][k3];
+const th = a * TAU + t * spd;
+const head = Math.pow(0.5 + 0.5 * sin(th * 2 - t * 2.1 + k3), 2);
+put3D(i, cos(th) * R, sin(th) * R * sin(tilt), sin(th) * R * cos(tilt), rx, ry,
+0.78 + head * 1.1, 146 + head * 92, 208 + head * 40, 255, 0.14 + head * 0.36, 0.02);
+} else {
+const cth = a * TAU + t * (0.22 + (i % 5) * 0.05) + sin(t * 0.6 + c * 6.28) * 0.18;
+const cph = Math.acos(2 * c - 1) + cos(t * 0.5 + a * TAU) * 0.20;
+const cd = (126 + 86 * Math.pow(b, 0.7) + 12 * sin(t * 1.1 + a * 9)) * breathe;
+const glow = 0.5 + 0.5 * sin(t * 1.3 + b * 10 + c * 6);
+put3D(i, cd * sin(cph) * cos(cth), cd * cos(cph), cd * sin(cph) * sin(cth), rx, ry,
+0.50 + glow * 0.62, 255, 204 + glow * 40, 150 + glow * 46, (0.045 + glow * 0.115) * (1 - b * 0.42), 0.55);
+}
 }
 } },
-rose: { follow: 0.12, repel: false, hint: '量子玫瑰只在没人盯着时显形。把鼠标移到中间盯着它，它就散开；移开视线，它才回来。', f(t, dt) {
-const want = S.px != null ? nearness(200) : 0;
-S.look += (want - S.look) * Math.min(1, dt * 3);
-const lk = S.look, br = 1 + sin(t * 0.8) * 0.03;
-const KS = [5, 3, 7], RS = [152, 108, 64], CL = [[100, 140, 255], [140, 170, 255], [200, 215, 255]];
+macro: { follow: 0.16, repel: true, hint: '宏观尺度的电子：波包在三维空间里呼吸，观测位置决定它显形成什么样。', trail: 0.36, f(t) {
+const rx = 0.34 + sin(t * 0.3) * 0.10, ry = t * 0.22;
+const breathe = 1 + sin(t * 1.7) * 0.05;
 for (let i = 0; i < N; i++) {
-const L = i % 3, th = SA[i] * Math.PI, k = KS[L];
-const r = RS[L] * br * cos(k * th) * (0.7 + 0.3 * sqrt(SB[i]));
-const rot = t * 0.08 * (L + 1) * (L % 2 ? -1 : 1);
-const x = 300 + r * cos(th + rot) + GX[i] * lk * 130, y = 300 + r * sin(th + rot) + GY[i] * lk * 130;
-put(i, x, y, 1.2, CL[L][0], CL[L][1], CL[L][2], 0.3 * (1 - lk * 0.85));
+const a = SA[i], b = SB[i], c = SC[i], role = i % 24;
+if (role < 15) {
+const sign = (role & 1) ? 1 : -1;
+const u = Math.pow(b, 0.8);
+const th = a * TAU + t * 0.30 * sign + u * 0.6;
+const R = 74 * sin(u * Math.PI) * (0.90 + c * 0.16) * breathe;
+const y3 = sign * (16 + u * 150) * breathe;
+const wave = 0.5 + 0.5 * cos(u * 9 - t * 3.0 + sign);
+put3D(i, cos(th) * R, y3, sin(th) * R, rx, ry,
+0.70 + wave * 1.0, 120 + wave * 105, 206 + wave * 42, 255,
+(0.10 + wave * 0.32) * sin(u * Math.PI * 0.92 + 0.05), 0.10);
+} else if (role < 21) {
+const u = a * TAU + t * 0.42, v = b * TAU;
+const R0 = 104 * breathe, r0 = (10 + 5 * sin(u * 4 - t * 2.2)) * (0.7 + 0.3 * c);
+const ph = 0.5 + 0.5 * sin(u * 3 + v - t * 2.4);
+put3D(i, (R0 + r0 * cos(v)) * cos(u), r0 * sin(v) * 1.5, (R0 + r0 * cos(v)) * sin(u), rx, ry,
+0.72 + ph * 0.8, 148 + ph * 92, 222 + ph * 28, 255, 0.14 + ph * 0.30, 0.04);
+} else {
+const axis = role % 3, ang = a * TAU + t * 0.20, R = 176 + (b - 0.5) * 3;
+const p = axis === 0 ? [cos(ang) * R, 0, sin(ang) * R]
+: axis === 1 ? [cos(ang) * R, sin(ang) * R, 0]
+: [0, cos(ang) * R, sin(ang) * R];
+put3D(i, p[0], p[1], p[2], rx, ry, 0.66, 168, 226, 255, 0.20, 0.0);
 }
-} }
-};
+}
+} },
+nucleus: { follow: 0.14, repel: true, hint: '强相互作用把核子紧紧束住：中心是重子团，外面六条通量管在抖。', trail: 0.4, f(t) {
+const rx = 0.34 + cos(t * 0.38) * 0.12, ry = t * 0.24;
+const node = [];
+for (let k = 0; k < 6; k++) {
+const ka = k * TAU / 6 + t * 0.32, kp = (k % 2 ? 0.55 : -0.55) + sin(t * 0.7 + k) * 0.18;
+const R = 146 + sin(t * 1.3 + k * 2) * 13;
+node.push([R * cos(ka) * cos(kp), R * sin(kp), R * sin(ka) * cos(kp)]);
+}
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i], role = i % 24;
+if (role < 9) {
+const r = 11 + 40 * Math.pow(b, 0.7);
+const th = a * TAU + t * 2.0, ph = Math.acos(2 * c - 1), hot = 1 - b;
+put3D(i, r * sin(ph) * cos(th), r * cos(ph), r * sin(ph) * sin(th), rx, ry,
+0.85 + hot * 1.3, 255, 162 + hot * 74, 108 + hot * 92, 0.20 + hot * 0.38, 0.04);
+} else if (role < 17) {
+const k = i % 6, nd = node[k], u = b;
+const vib = sin(u * Math.PI) * 9 * sin(t * 6 + u * 12 + k);
+const nx = -nd[2] / 150, ny = nd[0] / 150;
+const x3 = nd[0] * u + nx * vib + (c - 0.5) * 5;
+const y3 = nd[1] * u + (a - 0.5) * 5;
+const z3 = nd[2] * u + ny * vib;
+const pulse = Math.pow(0.5 + 0.5 * sin(u * 10 - t * 5 + k), 2);
+put3D(i, x3, y3, z3, rx, ry, 0.8 + pulse * 1.0,
+255, 192 + pulse * 54, 132 + pulse * 88, 0.16 + pulse * 0.40, 0.06);
+} else if (role < 21) {
+const k = i % 6, nd = node[k];
+const r = 6 + 16 * b, th = a * TAU + t * 3, ph = Math.acos(2 * c - 1);
+put3D(i, nd[0] + r * sin(ph) * cos(th), nd[1] + r * cos(ph), nd[2] + r * sin(ph) * sin(th),
+rx, ry, 0.95 + (1 - b) * 1.0, 255, 208, 152, 0.24 + (1 - b) * 0.30, 0.05);
+} else {
+const r = 182 + (b - 0.5) * 14, th = a * TAU, ph = Math.acos(2 * c - 1);
+put3D(i, r * sin(ph) * cos(th), r * cos(ph), r * sin(ph) * sin(th), rx, ry,
+0.6, 214, 172, 132, 0.11, 0.16);
+}
+}
+} },
+bubble: { follow: 0.12, repel: true, hint: '宏电子把周围物质排开，形成一个空腔：中间什么都没有，边缘才看得见。', trail: 0.34, f(t) {
+const rx = 0.26 + sin(t * 0.4) * 0.07, ry = t * 0.18;
+const cy = cos(ry), sy = sin(ry), cx = cos(rx), sx = sin(rx);
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i], role = i % 24;
+if (role < 19) {
+const th = a * TAU + t * 0.10, ph = Math.acos(2 * c - 1);
+const nx = sin(ph) * cos(th), ny = cos(ph), nz = sin(ph) * sin(th);
+const ripple = sin(ph * 10 - t * 2.4 + th * 3) * 4.5 + cos(th * 8 + t * 1.8) * 3.0;
+const R = 158 + ripple + (b - 0.5) * 3.5;
+const nz1 = -nx * sy + nz * cy;
+const nz2 = ny * sx + nz1 * cx;
+const fr = Math.pow(1 - Math.min(1, abs(nz2)), 2.2);
+put3D(i, nx * R, ny * R, nz * R, rx, ry, 0.6 + fr * 1.35,
+162 + fr * 88, 222 + fr * 30, 255, 0.03 + fr * 0.52, 0.05);
+} else {
+const polar = role & 1, ang = a * TAU + t * (polar ? -0.32 : 0.32);
+const R = 174 + (b - 0.5) * 4;
+put3D(i, polar ? 0 : cos(ang) * R, polar ? cos(ang) * R : 0, sin(ang) * R,
+rx, ry, 0.72, 192, 236, 255, 0.20, 0.0);
+}
+}
+} },
+quantum: { follow: 0.16, repel: false, hint: '没人看它时是一片概率波；鼠标靠近，它就坍缩成确定的点。', trail: 0.38, f(t) {
+const rx = 0.26 + sin(t * 0.25) * 0.06, ry = t * 0.18;
+const obs = nearness(230);
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i];
+const shell = i % 6;
+const R = (34 + shell * 30) * (1 - obs * 0.76) + (b - 0.5) * 2.2;
+const th = a * TAU + shell * 0.5 + t * 0.12;
+const ph = Math.acos(2 * c - 1);
+const x3 = R * sin(ph) * cos(th), y3 = R * cos(ph) * 0.88, z3 = R * sin(ph) * sin(th);
+const warm = shell & 1;
+const br = 0.55 + 0.45 * cos(shell * 1.9 - t * 2.0);
+put3D(i, x3, y3, z3, rx, ry,
+0.74 + (1 - obs) * 0.30,
+warm ? 196 : 132, warm ? 208 : 198, 255,
+(0.09 + br * 0.30) * (1 + obs * 0.55), 0.02);
+}
+} },
+transition: { follow: 0.14, repel: true, hint: '电子锁在离散能级上，跨过禁带的一瞬，它放出一个光子。', trail: 0.5, f(t) {
+const rx = 0.26 + sin(t * 0.3) * 0.05, ry = t * 0.20;
+const Rr = [72, 128, 184];
+const jump = (t * 0.72) % 1;
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i], role = i % 24;
+if (role < 15) {
+const lv = role % 3, R = Rr[lv] + (b - 0.5) * 3;
+const ang = a * TAU + t * (1.05 - lv * 0.30);
+const zw = sin(ang * (lv + 2) + t * 1.4) * (6 + lv * 5);
+put3D(i, cos(ang) * R, zw, sin(ang) * R, rx, ry,
+0.78 + (lv === 0 ? 0.3 : 0), 138 + lv * 42, 212 + lv * 14, 255,
+0.20 + (2 - lv) * 0.09, 0.0);
+} else if (role < 21) {
+const u = (b + t * 1.6) % 1, from = i % 2, to = from + 1;
+const r = Rr[from] + (Rr[to] - Rr[from]) * (u * u * (3 - 2 * u));
+const ang = a * TAU + t * 0.75 + u * 0.6;
+const flash = sin(u * Math.PI);
+put3D(i, cos(ang) * r, sin(u * Math.PI) * 32 * ((i & 1) ? 1 : -1), sin(ang) * r,
+rx, ry, 0.9 + flash * 1.15, 255, 212 + flash * 40, 142 + flash * 108, flash * 0.60, 0.14);
+} else {
+const R = 66 + jump * 172, ang = a * TAU;
+const fin = Math.min(1, jump * 8);
+put3D(i, cos(ang) * R, (c - 0.5) * 6, sin(ang) * R, rx, ry,
+0.85, 255, 228, 172, (1 - jump) * 0.36 * fin, 0.04);
+}
+}
+} },
+fusion: { follow: 0.16, repel: true, hint: '两个宏原子核越绕越近，最后并合成一个，沿两极喷出高能粒子束。', trail: 0.56, f(t) {
+const rx = 0.42 + sin(t * 0.28) * 0.07, ry = t * 0.28;
+const cyc = (t * 0.28) % 1;
+const sep = cyc < 0.65 ? (1 - cyc / 0.65) * 112 : 0;
+const burst = cyc >= 0.65 ? sin((cyc - 0.65) / 0.35 * Math.PI) : 0;
+const orb = t * (2.0 + (1 - sep / 112) * 3.2);
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i], role = i % 24;
+if (role < 10) {
+const side = (i & 1) ? 1 : -1, armR = 13 + b * 120;
+const armA = orb + side * Math.PI * 0.5 - b * 3.2 + (a - 0.5) * 0.45;
+const cx3 = side * sep * cos(orb), cz3 = side * sep * sin(orb);
+const hot = 1 - b;
+const QC = iqCol(0.3 + hot * 0.6, 0);
+put3D(i, cx3 + cos(armA) * armR * (0.35 + 0.65 * b), (c - 0.5) * (16 * (1 - b * 0.6)),
+cz3 + sin(armA) * armR * (0.35 + 0.65 * b), rx, ry,
+0.82 + hot * 1.35, QC[0], QC[1], QC[2],
+0.16 + hot * 0.34 + burst * 0.22, 0.30);
+} else if (role < 17) {
+const dir = (i & 1) ? 1 : -1, u = (b + t * 1.7) % 1;
+const fin = Math.min(1, u * 6);
+const h = dir * (16 + u * 228), coneR = (4 + u * 32) * (1 - burst * 0.3);
+const ang = a * TAU + t * 5 * dir + u * 6;
+put3D(i, cos(ang) * coneR, h, sin(ang) * coneR, rx, ry,
+0.8 + (1 - u) * 1.2, 182 + (1 - u) * 68, 222 + (1 - u) * 30, 255,
+(1 - u * 0.85) * (0.24 + burst * 0.48) * fin, 0.42);
+} else {
+const wave = (b + t * 0.72) % 1, R = 26 + wave * 218, ang = a * TAU + t * 0.45;
+const fin = Math.min(1, wave * 6);
+put3D(i, cos(ang) * R, (c - 0.5) * 9 * wave, sin(ang) * R, rx, ry,
+0.76 + (1 - wave) * 1.15, 255, 172 + (1 - wave) * 62, 112 + (1 - wave) * 88,
+(1 - wave) * (0.22 + burst * 0.42) * fin, 0.5);
+}
+}
+} },
+observer: { follow: 0.10, repel: false, hint: '概率波铺满空间；观察者的视线落下去的地方，波就塌成一个点。', trail: 0.4, f(t) {
+const rx = 0.56, ry = sin(t * 0.25) * 0.20;
+const has = S.px != null;
+const oxp = has ? (S.px - 300) * 0.72 : sin(t * 0.7) * 70;
+const ozp = has ? (S.py - 300) * 0.72 : cos(t * 0.55) * 60;
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i];
+const gx = (a - 0.5) * 400, gz = (b - 0.5) * 400;
+const dx = gx - oxp, dz = gz - ozp, d = sqrt(dx * dx + dz * dz) + 1;
+const well = Math.exp(-d * d / 10500);
+const x3 = gx - dx * well * 0.70, z3 = gz - dz * well * 0.70;
+const wave = sin(gx * 0.045 + t * 1.7) * cos(gz * 0.045 - t * 1.4) * 25 * (1 - well * 0.8);
+const y3 = wave + well * 108 * cos(d * 0.08 - t * 4);
+put3D(i, x3, y3, z3, rx, ry,
+(1.3 - well * 0.6) + well * 0.85 * (1 - c),
+142 + well * 108, 202 + well * 44, 255 - well * 55,
+0.09 + well * 0.56, 0.10 * (1 - well));
+}
+} },
+rose: { follow: 0.14, repel: false, hint: '量子玫瑰只在没人盯着时显形。把鼠标移到中间盯着它，它就散开；移开视线，它才回来。', trail: 0.40, f(t) {
+const obs = nearness(190);
+const rx = 0.58 + sin(t * 0.30) * 0.06, ry = t * 0.22;
+const P = 24, GOLDEN = 2.399963229728653;
+for (let i = 0; i < N; i++) {
+const a = SA[i], b = SB[i], c = SC[i], role = i % 24;
+if (role < 20) {
+const pIdx = i % P, layer = pIdx / (P - 1);
+const baseAng = pIdx * GOLDEN + t * 0.12;
+const u = Math.pow(b, 0.82), v = (a - 0.5) * 2;
+const width = sin(u * Math.PI * 0.92) * (0.40 + 0.55 * layer);
+const ang = baseAng + v * width;
+const openR = (10 + layer * 118) * (0.25 + 0.85 * Math.pow(u, 0.88));
+const curl = u > 0.68 ? Math.pow((u - 0.68) / 0.32, 2) * (16 + layer * 24) : 0;
+const r = openR + curl;
+const y3 = 34 - (1 - layer * 0.55) * u * 118 + curl * 0.60 + v * v * 11;
+const sc = obs * (40 + c * 90);
+const x3 = cos(ang) * r + cos(a * TAU * 7) * sc;
+const z3 = sin(ang) * r + sin(b * TAU * 7) * sc;
+const edge = Math.max(Math.pow(u, 2.2), Math.pow(abs(v), 2.4));
+put3D(i, x3, y3, z3, rx, ry,
+0.66 + edge * 0.95,
+214 + edge * 40 - layer * 22,
+96 + edge * 126 + (1 - layer) * 34,
+150 + edge * 100,
+(0.07 + edge * 0.34 + (1 - u) * 0.07) * (1 - obs * 0.42), 0.06 + obs * 0.4);
+} else {
+const life = (t * 0.22 + b) % 1;
+const ang = a * TAU * 2 + life * 3.2 + t * 0.25;
+const R = (16 + (1 - life) * 40) * (0.7 + 0.6 * life);
+put3D(i, cos(ang) * R, 44 - life * 158, sin(ang) * R, rx, ry,
+0.65 + (1 - life) * 0.85, 138, 228, 255, sin(life * Math.PI) * 0.30, 0.25);
+}
+}
+} }  };
+const TURB = { storm: 0.42, ball: 0.45, macro: 0.18, nucleus: 0.14, bubble: 0.10, quantum: 0.26, transition: 0.06, fusion: 0.30 };
+Object.keys(TURB).forEach(k => { if (SCN[k]) SCN[k].turb = TURB[k]; });
 let cur = 'ball';
 function setScene(k) {
 if (!SCN[k]) k = 'ball';
@@ -7098,14 +8212,14 @@ cur = k; S.sceneT = S.t; S.obs = 0; S.look = 0; S.boltK = -1;
 hint.textContent = SCN[k].hint;
 kick();
 }
-let prog = null, vbo = null, loc = {};
+let prog = null, vbo = null, lvbo = null, loc = {};
 if (gl) {
 const vs = 'attribute vec2 aP;attribute float aS;attribute vec4 aC;uniform vec2 uR;uniform float uH;varying vec4 vC;' +
 'vec3 hue(vec3 c,float a){const vec3 k=vec3(0.57735);float ca=cos(a);return c*ca+cross(k,c)*sin(a)+k*dot(k,c)*(1.0-ca);}' +
 'void main(){vec2 p=aP/uR*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);gl_PointSize=aS;vC=vec4(clamp(hue(aC.rgb,uH),0.0,1.0),aC.a);}';
 const fs = 'precision mediump float;varying vec4 vC;uniform float uG;' +
 'void main(){vec2 q=gl_PointCoord-0.5;float d=length(q)*2.0;if(d>1.0)discard;' +
-'float a=(exp(-d*d*7.0)+exp(-d*d*2.2)*0.45*uG)*vC.a;gl_FragColor=vec4(vC.rgb*a,a);}';
+'float a=smoothstep(1.0,0.92,d)*(1.0+0.25*uG)*vC.a;gl_FragColor=vec4(vC.rgb*a,a);}';
 const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
 prog = gl.createProgram();
 gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
@@ -7116,6 +8230,9 @@ gl.useProgram(prog);
 vbo = gl.createBuffer();
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 gl.bufferData(gl.ARRAY_BUFFER, BUF.byteLength, gl.DYNAMIC_DRAW);
+lvbo = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, lvbo);
+gl.bufferData(gl.ARRAY_BUFFER, LBUF.byteLength, gl.DYNAMIC_DRAW);
 loc = { P: gl.getAttribLocation(prog, 'aP'), S: gl.getAttribLocation(prog, 'aS'), C: gl.getAttribLocation(prog, 'aC'),
 R: gl.getUniformLocation(prog, 'uR'), H: gl.getUniformLocation(prog, 'uH'), G: gl.getUniformLocation(prog, 'uG') };
 gl.enableVertexAttribArray(loc.P); gl.vertexAttribPointer(loc.P, 2, gl.FLOAT, false, 28, 0);
@@ -7124,10 +8241,77 @@ gl.enableVertexAttribArray(loc.C); gl.vertexAttribPointer(loc.C, 4, gl.FLOAT, fa
 gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
 }
 }
-let W = 0, H = 0, dpr = 1, cx = 0, cy = 0, u = 1;
+let qProg = null, tProg = null, bProg = null, quadBuf = null, fb = null, fbTex = null, fbW = 0, fbH = 0, fbQ = null, fbQTex = null;
+if (gl) {
+const qvs = 'attribute vec2 aQ;varying vec2 vUv;void main(){vUv=aQ*0.5+0.5;gl_Position=vec4(aQ,0.0,1.0);}';
+const mkProg = fs => {
+const p = gl.createProgram();
+const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
+gl.attachShader(p, sh(gl.VERTEX_SHADER, qvs)); gl.attachShader(p, sh(gl.FRAGMENT_SHADER, fs));
+gl.bindAttribLocation(p, 0, 'aQ');
+gl.linkProgram(p);
+return gl.getProgramParameter(p, gl.LINK_STATUS) ? p : null;
+};
+qProg = mkProg('precision mediump float;void main(){gl_FragColor=vec4(0.0);}');
+tProg = mkProg('precision mediump float;varying vec2 vUv;uniform sampler2D uT;uniform sampler2D uB;uniform float uK;uniform vec2 uPx;' +
+'void main(){vec4 c=texture2D(uT,vUv);' +
+'vec3 bl=texture2D(uB,vUv).rgb;' +
+'vec3 x=pow(min(c.rgb+bl*uK,vec3(1.0)),vec3(0.95));' +
+'vec2 q=vUv-0.5;float vg=1.0-0.20*dot(q,q)*2.2;' +
+'gl_FragColor=vec4(x*vg,c.a);}');
+bProg = mkProg('precision mediump float;varying vec2 vUv;uniform sampler2D uT;uniform vec2 uP;' +
+'void main(){vec3 s=vec3(0.0);' +
+'s+=texture2D(uT,vUv+vec2(-1.0,-1.0)*uP).rgb;' +
+'s+=texture2D(uT,vUv+vec2( 0.0,-1.0)*uP).rgb*2.0;' +
+'s+=texture2D(uT,vUv+vec2( 1.0,-1.0)*uP).rgb;' +
+'s+=texture2D(uT,vUv+vec2(-1.0, 0.0)*uP).rgb*2.0;' +
+'s+=texture2D(uT,vUv).rgb*4.0;' +
+'s+=texture2D(uT,vUv+vec2( 1.0, 0.0)*uP).rgb*2.0;' +
+'s+=texture2D(uT,vUv+vec2(-1.0, 1.0)*uP).rgb;' +
+'s+=texture2D(uT,vUv+vec2( 0.0, 1.0)*uP).rgb*2.0;' +
+'s+=texture2D(uT,vUv+vec2( 1.0, 1.0)*uP).rgb;' +
+'gl_FragColor=vec4(s/16.0,1.0);}');
+if (qProg && tProg && bProg) {
+quadBuf = gl.createBuffer();
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.bufferData(gl.ARRAY_BUFFER, new Float32Array([-1, -1, 1, -1, -1, 1, 1, 1]), gl.STATIC_DRAW);
+} else { qProg = tProg = bProg = null; }
+}
+function ensureFbo() {
+if (!gl || !qProg) return false;
+if (fb && fbW === W && fbH === H) return true;
+if (!fb) { fb = gl.createFramebuffer(); fbTex = gl.createTexture(); }
+const qw = Math.max(1, W >> 2), qh = Math.max(1, H >> 2);
+if (!fbQ) { fbQ = gl.createFramebuffer(); fbQTex = gl.createTexture(); }
+gl.bindTexture(gl.TEXTURE_2D, fbQTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, qw, qh, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbQ);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbQTex, 0);
+const okQ = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+if (!okQ) { fbQ = null; fbQTex = null; }
+gl.bindTexture(gl.TEXTURE_2D, fbTex);
+gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, W, H, 0, gl.RGBA, gl.UNSIGNED_BYTE, null);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+gl.framebufferTexture2D(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, gl.TEXTURE_2D, fbTex, 0);
+const ok = gl.checkFramebufferStatus(gl.FRAMEBUFFER) === gl.FRAMEBUFFER_COMPLETE;
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+fbW = W; fbH = H;
+if (!ok) { fb = null; fbTex = null; qProg = tProg = null; }
+return ok;
+}
+let W = 0, H = 0, dpr = 1, cx = 0, cy = 0, u = 1, lastHx = 0, lastHy = 0, lastHsc = 1;
 function layout() {
 const r = stage.getBoundingClientRect();
-dpr = Math.min(2, devicePixelRatio || 1);
+dpr = Math.min(2.5, Math.max(1.5, devicePixelRatio || 1));
 const w = Math.max(1, Math.round(r.width * dpr)), h = Math.max(1, Math.round(r.height * dpr));
 if (w !== W || h !== H) { W = w; H = h; cv.width = w; cv.height = h; if (gl) gl.viewport(0, 0, w, h); }
 const c = center.getBoundingClientRect();
@@ -7150,39 +8334,206 @@ if (!running()) { if (gl) { gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_
 const real = Math.min(0.1, (now - last) / 1000 || 0.016);
 last = now;
 const dt = Math.min(0.05, real) * (REDUCED ? 0.35 : 1);
-S.t += dt;
+S.t += dt * 0.62;
 ema = ema * 0.94 + real * 1000 * 0.06;
 if (++sinceAdapt > 150 && ema > 42 && N > 12000) { N = Math.max(12000, Math.floor(N * 0.8)); sinceAdapt = 0; }
 layout();
 const sc = SCN[cur];
 sc.f(S.t, dt);
+const turb = REDUCED ? 0 : (sc.turb || 0);
+if (turb > 0) buildFlow(S.t);
+let fwx = 0, fwy = 0;
+if (cur === 'ball' && !REDUCED && turb > 0) {
+flowAt(300, 300, flowOut);
+fwx = flowOut[0] * 0.0008; fwy = flowOut[1] * 0.0008;
+}
+const enDec = Math.exp(-4.5 * dt);
+const trailK = REDUCED ? 0 : (sc.trail != null ? sc.trail : 0.34);
 const mt = Math.min(1, (S.t - S.sceneT) / 1.1);
 const fol = mt < 1 ? 0.035 + 0.12 * mt : sc.follow;
 const T = window.TUNE || { bright: 100, size: 100, glow: 50, hue: 0 };
-const sizeK = 1.8 * dpr * (T.size / 100) * Math.max(0.7, Math.min(1.6, u / dpr)) * (1 + T.glow / 100 * 0.6);
-const alphaK = (T.bright / 100) * Math.min(1.6, sqrt(MAX / N)) * 0.9;
+const sizeK = 1.05 * dpr * (T.size / 100) * Math.max(0.7, Math.min(1.6, u / dpr)) * (1 + T.glow / 100 * 0.6);
+const brDim = (window.__conceptHands && window.__conceptHands.bridge > 0.05) ? 1 - 0.42 * Math.min(1, window.__conceptHands.bridge) : 1;
+const alphaK = (T.bright / 100) * Math.min(1.6, sqrt(MAX / N)) * 0.9 * (trailK > 0.3 ? 0.78 : 1) * brDim;
 const rep = sc.repel && S.px != null, rr = 70;
+if (window.__handsTick) window.__handsTick(real);
+const HD = window.__conceptHands;
+const hAct = !!(HD && HD.active);
+const hpin = hAct ? HD.pinch : 0, hbur = hAct ? HD.burst : 0;
+const hfist = hAct ? HD.fist || 0 : 0, hsw = hAct ? HD.swirl || 0 : 0;
+const hdep = hAct ? HD.depth || 0 : 0, hbr = hAct ? HD.bridge || 0 : 0;
+const hPush = hbur * hbur * 7;
+const hgath = hpin * 2.6 + hfist * 6;
+const hswA = hsw * 0.085, hswC = hAct ? Math.cos(hswA) : 1, hswS = hAct ? Math.sin(hswA) : 0;
+const dSc = 1 - hdep * 0.28;
+const aSc = 1 - Math.max(0, hdep) * 0.55 - Math.min(0, hdep) * 0.35;
+const bOn = hAct && hbr > 0.02 && HD.bp;
+const b1x = bOn ? HD.bp.x1 : 0, b1y = bOn ? HD.bp.y1 : 0;
+const bvx = bOn ? HD.bp.x2 - HD.bp.x1 : 0, bvy = bOn ? HD.bp.y2 - HD.bp.y1 : 0;
+const blen2 = bOn ? Math.max(1, bvx * bvx + bvy * bvy) : 1;
+const bPull = bOn ? 0.14 * hbr : 0;
+const hk = HD ? (u / dpr) * 0.86 : 0;
+const hxA = HD ? (HD.x - 300) * hk : 0, hyA = HD ? (HD.y - 300) * hk : 0;
+const limX = (W / dpr) * 0.30, limY = (H / dpr) * 0.26;
+const hxPx = Math.max(-limX, Math.min(limX, hxA)), hyPx = Math.max(-limY, Math.min(limY, hyA));
+if (Math.abs(hxPx - lastHx) > 0.2 || Math.abs(hyPx - lastHy) > 0.2) {
+lastHx = hxPx; lastHy = hyPx;
+center.style.setProperty('--hx', hxPx.toFixed(1) + 'px');
+center.style.setProperty('--hy', hyPx.toFixed(1) + 'px');
+}
+if (Math.abs(dSc - lastHsc) > 0.004) {
+lastHsc = dSc;
+center.style.setProperty('--hsc', dSc.toFixed(3));
+}
 for (let i = 0; i < N; i++) {
 let x = X[i], y = Y[i];
-const dx0 = TX[i] - x, dy0 = TY[i] - y;
-if (mt >= 1 && dx0 * dx0 + dy0 * dy0 > 14400) { x = TX[i]; y = TY[i]; }
-else { x += dx0 * fol; y += dy0 * fol; }
+let en = EN[i];
+if (en > 0.002) en *= enDec;
+const sx = TX[i] - x, sy = TY[i] - y;
+if (mt >= 1 && sx * sx + sy * sy > 14400) { x = TX[i]; y = TY[i]; }
+else { x += sx * fol; y += sy * fol; }
 if (rep) {
 const dx = x - S.px, dy = y - S.py, d2 = dx * dx + dy * dy;
-if (d2 < rr * rr && d2 > 0.01) { const d = sqrt(d2), k = (1 - d / rr); x += dx / d * k * k * 18; y += dy / d * k * k * 18; }
+if (d2 < rr * rr && d2 > 0.01) {
+const d = sqrt(d2), k = (1 - d / rr);
+x += dx / d * k * k * 18; y += dy / d * k * k * 18;
+if (k > en) en = k;                       /* 被手指拨到的地方亮一下 */
 }
+}
+if (hAct) {
+if (hbur > en) en = hbur;                        /* 爆散：整团亮一下 */
+if (hsw * hsw > 0.01) { const sv = abs(hsw) * 0.7; if (sv > en) en = sv; }
+if (hgath > 0.02) {
+const bx = x - 300, by = y - 300, cd = sqrt(bx * bx + by * by) || 1;
+x -= bx / cd * hgath; y -= by / cd * hgath;
+}
+if (hPush > 0.01) {
+const bx = x - 300, by = y - 300, bd = sqrt(bx * bx + by * by) || 1;
+x += bx / bd * hPush; y += by / bd * hPush;
+}
+if (hswS) {                                        /* 旋涡：绕中心转一小步 */
+const rx = x - 300, ry = y - 300;
+x = 300 + rx * hswC - ry * hswS;
+y = 300 + rx * hswS + ry * hswC;
+}
+if (bPull) {
+const px0 = x - b1x, py0 = y - b1y;
+let t = (px0 * bvx + py0 * bvy) / blen2;
+t = t < 0 ? 0 : t > 1 ? 1 : t;
+const qx = b1x + bvx * t, qy = b1y + bvy * t;
+x += (qx - x) * bPull; y += (qy - y) * bPull;
+}
+}
+if (turb > 0) {
+flowAt(x, y, flowOut);
+const tk = turb * TF[i] * (0.5 + 0.9 * SC[i]) * dt;
+x += flowOut[0] * tk; y += flowOut[1] * tk;
+}
+if (fwx || fwy) {
+const rdx = x - 300, rdy = y - 300;
+const rl = sqrt(rdx * rdx + rdy * rdy) / 240;
+const kb = rl > 1 ? 1 : rl * rl;
+x += fwx * kb; y += fwy * kb;
+}
+const pvx = X[i], pvy = Y[i];
 X[i] = x; Y[i] = y;
 const o = i * 7;
-BUF[o] = cx + (x - 300) * u; BUF[o + 1] = cy + (y - 300) * u; BUF[o + 2] = TS[i] * sizeK;
-BUF[o + 3] = TR[i]; BUF[o + 4] = TG[i]; BUF[o + 5] = TB[i]; BUF[o + 6] = Math.max(0, Math.min(1, TA[i] * alphaK));
+BUF[o] = cx + (x - 300) * u * dSc; BUF[o + 1] = cy + (y - 300) * u * dSc;
+BUF[o + 2] = TS[i] * sizeK * (1 - Math.max(0, hdep) * 0.22) * (1 + hfist * 0.25) * (1 + en * 1.1);
+BUF[o + 3] = TR[i] + (1 - TR[i]) * en * 0.55;
+BUF[o + 4] = TG[i] + (1 - TG[i]) * en * 0.45;
+BUF[o + 5] = TB[i] + (1 - TB[i]) * en * 0.30;
+BUF[o + 6] = Math.max(0, Math.min(1, TA[i] * alphaK * aSc * (1 + en * 0.85)));
+EN[i] = en;
+const lo = i * 14, la2 = Math.min(1, BUF[o + 6] * 0.95);
+const spx = BUF[o] - (cx + (pvx - 300) * u * dSc), spy = BUF[o + 1] - (cy + (pvy - 300) * u * dSc);
+const rawLen = sqrt(spx * spx + spy * spy);
+const okStreak = false; /* 彻底停用硬线段：不再有跨屏飞线 */
+const strK = okStreak ? 3.2 : 0;
+LBUF[lo] = BUF[o] - spx * strK; LBUF[lo + 1] = BUF[o + 1] - spy * strK;
+LBUF[lo + 2] = 1; LBUF[lo + 3] = BUF[o + 3]; LBUF[lo + 4] = BUF[o + 4]; LBUF[lo + 5] = BUF[o + 5]; LBUF[lo + 6] = la2;
+LBUF[lo + 7] = BUF[o]; LBUF[lo + 8] = BUF[o + 1];
+LBUF[lo + 9] = 1; LBUF[lo + 10] = BUF[o + 3]; LBUF[lo + 11] = BUF[o + 4]; LBUF[lo + 12] = BUF[o + 5]; LBUF[lo + 13] = la2;
 }
-if (gl) {
+if (gl && qProg && ensureFbo()) {
+gl.bindFramebuffer(gl.FRAMEBUFFER, fb);
+gl.viewport(0, 0, W, H);
+gl.disable(gl.BLEND);
+gl.useProgram(qProg);
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+if (trailK > 0.01) {
+gl.enable(gl.BLEND);
+gl.blendFunc(gl.ZERO, gl.CONSTANT_ALPHA);
+gl.blendColor(0, 0, 0, trailK);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+} else {
 gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+}
+gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+gl.useProgram(prog);
 gl.uniform2f(loc.R, W, H);
 gl.uniform1f(loc.H, T.hue * Math.PI / 180);
 gl.uniform1f(loc.G, T.glow / 50);
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 gl.bufferSubData(gl.ARRAY_BUFFER, 0, BUF.subarray(0, N * 7));
+gl.enableVertexAttribArray(loc.P); gl.vertexAttribPointer(loc.P, 2, gl.FLOAT, false, 28, 0);
+gl.enableVertexAttribArray(loc.S); gl.vertexAttribPointer(loc.S, 1, gl.FLOAT, false, 28, 8);
+gl.enableVertexAttribArray(loc.C); gl.vertexAttribPointer(loc.C, 4, gl.FLOAT, false, 28, 12);
+gl.drawArrays(gl.POINTS, 0, N);
+gl.bindBuffer(gl.ARRAY_BUFFER, lvbo);
+gl.bufferSubData(gl.ARRAY_BUFFER, 0, LBUF.subarray(0, N * 14));
+gl.enableVertexAttribArray(loc.P); gl.vertexAttribPointer(loc.P, 2, gl.FLOAT, false, 28, 0);
+gl.enableVertexAttribArray(loc.S); gl.vertexAttribPointer(loc.S, 1, gl.FLOAT, false, 28, 8);
+gl.enableVertexAttribArray(loc.C); gl.vertexAttribPointer(loc.C, 4, gl.FLOAT, false, 28, 12);
+gl.drawArrays(gl.LINES, 0, N * 2);
+if (fbQ) {
+gl.bindFramebuffer(gl.FRAMEBUFFER, fbQ);
+gl.viewport(0, 0, Math.max(1, W >> 2), Math.max(1, H >> 2));
+gl.disable(gl.BLEND);
+gl.useProgram(bProg);
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, fbTex);
+gl.uniform1i(gl.getUniformLocation(bProg, 'uT'), 0);
+gl.uniform2f(gl.getUniformLocation(bProg, 'uP'), 0.9 / W, 0.9 / H);
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+}
+gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+gl.viewport(0, 0, W, H);
+gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+gl.useProgram(tProg);
+gl.activeTexture(gl.TEXTURE0);
+gl.bindTexture(gl.TEXTURE_2D, fbTex);
+gl.uniform1i(tProg && gl.getUniformLocation(tProg, 'uT'), 0);
+if (fbQ) {
+gl.activeTexture(gl.TEXTURE1);
+gl.bindTexture(gl.TEXTURE_2D, fbQTex);
+gl.uniform1i(gl.getUniformLocation(tProg, 'uB'), 1);
+gl.activeTexture(gl.TEXTURE0);
+}
+gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 0.20 : 0.0);
+gl.uniform2f(gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
+gl.uniform2f(tProg && gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
+gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
+gl.enableVertexAttribArray(0);
+gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
+gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
+gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+} else if (gl) {
+gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
+gl.useProgram(prog);
+gl.uniform2f(loc.R, W, H);
+gl.uniform1f(loc.H, T.hue * Math.PI / 180);
+gl.uniform1f(loc.G, T.glow / 50);
+gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
+gl.bufferSubData(gl.ARRAY_BUFFER, 0, BUF.subarray(0, N * 7));
+gl.enableVertexAttribArray(loc.P); gl.vertexAttribPointer(loc.P, 2, gl.FLOAT, false, 28, 0);
+gl.enableVertexAttribArray(loc.S); gl.vertexAttribPointer(loc.S, 1, gl.FLOAT, false, 28, 8);
+gl.enableVertexAttribArray(loc.C); gl.vertexAttribPointer(loc.C, 4, gl.FLOAT, false, 28, 12);
 gl.drawArrays(gl.POINTS, 0, N);
 } else if (c2) {
 c2.clearRect(0, 0, W, H);
@@ -7204,7 +8555,13 @@ document.addEventListener('visibilitychange', kick);
 addEventListener('resize', kick);
 window.__stageFx = {
 scene: setScene,
-info: () => ({ n: N, scene: cur, frames, running: raf != null, gl: !!gl, ema: Math.round(ema) })
+info: () => ({ n: N, scene: cur, frames, running: raf != null, gl: !!gl, ema: Math.round(ema) }),
+sample: i => {
+i = i | 0;
+const o = i * 7;
+return { x: X[i], y: Y[i], tx: TX[i], ty: TY[i], a: TA[i], size: BUF[o + 2], alpha: BUF[o + 6],
+nan: !isFinite(X[i]) || !isFinite(Y[i]) || !isFinite(BUF[o]) };
+}
 };
 const curBtn = document.querySelector('#cgList [aria-current="true"]');
 setScene(curBtn ? curBtn.dataset.node : 'ball');

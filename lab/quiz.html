@@ -28,9 +28,11 @@
   .dots i{width:26px;height:2px;background:rgba(120,160,220,.2)}
   .dots i.on{background:var(--cyan)}
   .card{background:rgba(10,17,27,.82);border:1px solid var(--line);border-radius:14px;padding:28px}
-  .avatar{width:96px;height:96px;border-radius:50%;border:1px dashed rgba(127,208,255,.4);
+  .avatar{overflow:hidden;width:96px;height:96px;border-radius:50%;border:1px dashed rgba(127,208,255,.4);
     display:flex;align-items:center;justify-content:center;color:var(--dim);font-size:11px;letter-spacing:.1em;
     margin-bottom:18px;background:radial-gradient(circle at 50% 40%, rgba(127,208,255,.12), transparent 70%)}
+  .avatar img{width:100%;height:100%;object-fit:cover;display:block}
+  .avatar.filled{border-style:solid;border-color:rgba(127,208,255,.5);box-shadow:0 0 0 1px rgba(127,208,255,.18), 0 8px 26px -12px rgba(127,208,255,.55)}
   .branch{font-size:15px;color:var(--amber);letter-spacing:.16em;margin-bottom:6px}
   .name{font-size:30px;margin-bottom:14px}
   .desc{color:#a9bcd2;font-size:14.5px;line-height:1.85;margin-bottom:18px}
@@ -124,6 +126,26 @@
     });
   }
 
+  /* 归档照：02 页面把人物档案里的同一张图 postMessage 进来，结果卡直接显示 */
+  var PORTRAIT = {}, lastBranch = null;
+  window.addEventListener('message', function (ev) {
+    var d = ev.data;
+    if (d && d.type === 'bl:portraits' && d.map) { PORTRAIT = d.map; paintAvatar(lastBranch); }
+  });
+  function paintAvatar(id) {
+    if (id) lastBranch = id;
+    var el = document.getElementById('avatar');
+    if (!el || !lastBranch) return;
+    var src = PORTRAIT[lastBranch];
+    if (!src) return;
+    el.innerHTML = '';
+    var img = document.createElement('img');
+    img.alt = '档案照';
+    img.src = src;
+    el.appendChild(img);
+    el.classList.add('filled');
+  }
+
   function result() {
     var order = ['o', 'c', 'e', 'w'];
     var key = 'o', best = -1, tie = [];
@@ -155,6 +177,7 @@
       + '<a class="go" href="showcase.html?b=' + b.id + '">进入武器库 →</a>'
       + '<span class="again" id="again">重测一次</span>'
       + '</div>';
+    paintAvatar(b.id);
     var goEl = app.querySelector('.go');
 if (goEl) goEl.addEventListener('click', function (ev) {
   if (window.top === window) return;
@@ -171,6 +194,7 @@ try { parent.postMessage({ type: 'bl:quiz:done', branch: b.id }, '*'); } catch (
   }
 
   render();
+  try { if (parent !== window) parent.postMessage({ type: 'bl:quiz:ready' }, '*'); } catch (e) {}
   window.__quiz = { score: function () { return score; }, result: result };
 })();
 </script>

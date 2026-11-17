@@ -18,6 +18,22 @@
   var rtScene = new T.WebGLRenderTarget(W, H, { minFilter: T.LinearFilter, magFilter: T.LinearFilter });
   var rtA = new T.WebGLRenderTarget(W >> 2, H >> 2, { minFilter: T.LinearFilter, magFilter: T.LinearFilter });
   var rtB = new T.WebGLRenderTarget(W >> 2, H >> 2, { minFilter: T.LinearFilter, magFilter: T.LinearFilter });
+
+  /* ---------- 残影（Afterimage）----------
+     思路照 three.js 的 AfterimagePass：两张全屏 RT 乒乓，每帧 out = max(新场景, 上一帧 * damp)。
+     damp=0 时 out 就等于场景本身，等于没开，所以平时不花性能、也不影响画面；
+     连杀 / 宏聚变时把 damp 推上去，电弧和角色就会拖出刀光。
+     放在 bloom 之前，残影也会被泛光一起糊开，比之后再叠自然。 */
+  var rtAI = [
+    new T.WebGLRenderTarget(W, H, { minFilter: T.LinearFilter, magFilter: T.LinearFilter }),
+    new T.WebGLRenderTarget(W, H, { minFilter: T.LinearFilter, magFilter: T.LinearFilter })
+  ];
+  var aiIdx = 0, aiDamp = 0, aiTarget = 0;
+  var aiMat = new T.ShaderMaterial({
+    uniforms: { tNew: { value: null }, tOld: { value: null }, uDamp: { value: 0 } },
+    vertexShader: 'varying vec2 vUv; void main(){ vUv = uv; gl_Position = vec4(position.xy, 0.0, 1.0); }',
+    fragmentShader: 'uniform sampler2D tNew; uniform sampler2D tOld; uniform float uDamp; varying vec2 vUv; void main(){ vec3 n = texture2D(tNew, vUv).rgb; vec3 o = texture2D(tOld, vUv).rgb * uDamp; gl_FragColor = vec4(max(n, o), 1.0); }'
+  });
   var quadScene = new T.Scene();
   var quadCam = new T.OrthographicCamera(-1, 1, 1, -1, 0, 1);
   var quadGeo = new T.PlaneGeometry(2, 2);
@@ -53,6 +69,8 @@
 
   function bloomResize(w, h) {
     rtScene.setSize(w, h);
+    rtAI[0].setSize(Math.max(2, w >> 2), Math.max(2, h >> 2));
+    rtAI[1].setSize(Math.max(2, w >> 2), Math.max(2, h >> 2));
     rtA.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2));
     rtB.setSize(Math.max(2, w >> 2), Math.max(2, h >> 2));
     blurMat.uniforms.uTexel.value.set(1 / Math.max(2, w >> 2), 1 / Math.max(2, h >> 2));
@@ -63,12 +81,29 @@
     renderer.setRenderTarget(rtScene);
     renderer.render(scene, camera);
 
+    /* 残影只挂在「亮部」这一层：先提亮再让亮部自己跟自己衰减叠加。
+       整屏做残影会把地面网格一起累积，画面看起来像起雾 */
+    brightMat.uniforms.tDiffuse.value = rtScene.texture;
     quad.material = brightMat;
     renderer.setRenderTarget(rtA);
     renderer.render(quadScene, quadCam);
 
+    var bloomSrc = rtA.texture;
+    if (aiDamp > 0.004) {
+      var dst = rtAI[aiIdx], src = rtAI[1 - aiIdx];
+      aiMat.uniforms.tNew.value = rtA.texture;
+      aiMat.uniforms.tOld.value = src.texture;
+      aiMat.uniforms.uDamp.value = aiDamp;
+      quad.material = aiMat;
+      renderer.setRenderTarget(dst);
+      renderer.render(quadScene, quadCam);
+      aiIdx = 1 - aiIdx;
+      bloomSrc = dst.texture;
+    }
+
+    /* 两轮高斯：第一轮从 bloomSrc 读，之后在 rtA/rtB 之间乒乓 */
     for (var i = 0; i < 2; i++) {
-      blurMat.uniforms.tDiffuse.value = rtA.texture;
+      blurMat.uniforms.tDiffuse.value = i === 0 ? bloomSrc : rtA.texture;
       blurMat.uniforms.uDir.value.set(1, 0);
       quad.material = blurMat;
       renderer.setRenderTarget(rtB);
@@ -76,10 +111,13 @@
 
       blurMat.uniforms.tDiffuse.value = rtB.texture;
       blurMat.uniforms.uDir.value.set(0, 1);
+      quad.material = blurMat;
       renderer.setRenderTarget(rtA);
       renderer.render(quadScene, quadCam);
     }
 
+    composeMat.uniforms.tBase.value = rtScene.texture;
+    composeMat.uniforms.tBloom.value = rtA.texture;
     quad.material = composeMat;
     renderer.setRenderTarget(null);
     renderer.render(quadScene, quadCam);
@@ -446,16 +484,27 @@
       spawnBullet(cx, cz, Math.cos(a2) * 3.0, Math.sin(a2) * 3.0, 0xd9b3ff, 7, 1.3);
     }
   }
-  function spawn(kind) {
-    if (enemies.length > 160) return;
+  /* 三频：靶标分三个频段，打到同频才有加成 */
+  var FREQ = [0x48d1ff, 0xffb84d, 0xc678ff];
+  var FREQ_NAME = ['低频', '中频', '高频'];
+
+  function spawn(kind, hpMul, ang, rad) {
+    if (enemies.length > 220) return;
     var def = KINDS[kind] || KINDS.tank;
     var grp = makeTank(kind);
-    var a = Math.random() * Math.PI * 2;
-    var r = (20 + Math.random() * 6) * (S.zoom || 1);
+    var a = (ang == null ? Math.random() * Math.PI * 2 : ang);
+    var r = (rad != null ? rad : (20 + Math.random() * 6)) * (S.zoom || 1);
     grp.position.set(Math.cos(a) * r, 0, Math.sin(a) * r);
     grp.scale.setScalar(def.size);
     scene.add(grp);
-    enemies.push({ g: grp, hp: def.hp * (1 + (S.wave - 1) * 0.18), max: def.hp, sp: def.sp, dmg: def.dmg, kind: kind, flash: 0 });
+    var hpm = def.hp * (1 + (S.wave - 1) * 0.18) * (hpMul || 1);
+    var fq = Math.floor(Math.random() * 3);
+    var ring = new T.Mesh(new T.TorusGeometry(1.25, 0.045, 6, 28),
+      new T.MeshBasicMaterial({ color: FREQ[fq], transparent: true, opacity: 0.75, blending: T.AdditiveBlending, depthWrite: false }));
+    ring.rotation.x = -Math.PI / 2;
+    ring.position.y = 0.12;
+    grp.add(ring);
+    enemies.push({ g: grp, hp: hpm, max: hpm, sp: def.sp, dmg: def.dmg, kind: kind, flash: 0, freq: fq, ring: ring });
   }
 
   /* ---------- BOSS：宏电子本体 ---------- */
@@ -638,6 +687,16 @@ function toggleMute() {
     for (var i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * (1 - i / n);
     return b;
   }
+  /* 触觉：安卓 Chrome 会真震，桌面 / iOS 静默忽略。和 sfx 一样走「轻一点，别一直震」的思路 */
+  var lastBuzz = 0;
+  function buzz(pattern, force) {
+    if (!navigator.vibrate) return;
+    var now = performance.now();
+    if (!force && now - lastBuzz < 70) return;
+    lastBuzz = now;
+    try { navigator.vibrate(pattern); } catch (e) {}
+  }
+
   function sfx(kind, k) {
     if (AUD.muted) return;
     var c = audioInit();
@@ -802,6 +861,102 @@ function toggleMute() {
     fx.push({ o: m, life: life, max: life, kind: 'ring', r0: r0, r1: r1 });
   }
 
+  /* 击杀残影：空泡——一圈线框球先胀开再收，中间的点往里塌 */
+  function voidBubble(pos) {
+    var p = pos.clone(); p.y = 0.9;
+    var wire = new T.LineSegments(
+      new T.EdgesGeometry(new T.IcosahedronGeometry(1, 1)),
+      new T.LineBasicMaterial({ color: 0x9fd8ff, transparent: true, opacity: 0.85, blending: T.AdditiveBlending, depthWrite: false })
+    );
+    wire.position.copy(p);
+    wire.scale.setScalar(0.3);
+    scene.add(wire);
+    fx.push({ o: wire, life: 0.8, max: 0.8, kind: 'void' });
+
+    var n = 22, arr = new Float32Array(n * 3), vel = [];
+    for (var i = 0; i < n; i++) {
+      var a = Math.random() * Math.PI * 2, u = Math.random() * 2 - 1, r = 1.9 + Math.random() * 0.9;
+      var rr = Math.sqrt(1 - u * u);
+      arr[i * 3] = Math.cos(a) * rr * r;
+      arr[i * 3 + 1] = 0.9 + u * r * 0.8;
+      arr[i * 3 + 2] = Math.sin(a) * rr * r;
+      vel.push(new T.Vector3(-arr[i * 3], -arr[i * 3 + 1], -arr[i * 3 + 2]).multiplyScalar(1.6));
+    }
+    var g = new T.BufferGeometry();
+    g.setAttribute('position', new T.BufferAttribute(arr, 3));
+    var pts = new T.Points(g, new T.PointsMaterial({
+      color: 0xd8f2ff, size: 0.13, transparent: true, opacity: 0.95,
+      blending: T.AdditiveBlending, depthWrite: false
+    }));
+    pts.position.copy(p);
+    pts.frustumCulled = false;
+    scene.add(pts);
+    fx.push({ o: pts, life: 0.55, max: 0.55, kind: 'vac', geo: g, v: vel });
+  }
+
+  /* 宏聚变：两颗宏原子核对撞，半径 32 m 内全部结算 */
+  function macroFusion() {
+    if (S.over) return;
+    if ((S.ultT || 0) > 0) { toast('宏聚变冷却中 · ' + Math.ceil(S.ultT) + 's', 1200); return; }
+    S.ultT = 36;
+    S.trailT = 1.1;      /* 残影拉满一会儿，对撞那一下留一道光 */
+    buzz([30, 40, 90], true);
+    var R = 32, R2 = R * R;
+    var c = new T.Vector3(S.pos.x, 1.3, S.pos.z);
+    /* 先记账再放特效：电弧要打到还站着的靶标上，结算放在最后 */
+    var hits = [];
+    for (var ei = enemies.length - 1; ei >= 0; ei--) {
+      var en = enemies[ei];
+      if (en.dead) continue;
+      var dx = en.g.position.x - c.x, dz = en.g.position.z - c.z;
+      if (dx * dx + dz * dz <= R2) hits.push({ e: en, x: en.g.position.x, z: en.g.position.z, fq: en.freq });
+    }
+
+    for (var s2 = -1; s2 <= 1; s2 += 2) {
+      var m = new T.Mesh(new T.SphereGeometry(1.15, 16, 12), new T.MeshBasicMaterial({
+        color: s2 < 0 ? 0x9fd8ff : 0xffc46b, transparent: true, opacity: 0.95,
+        blending: T.AdditiveBlending, depthWrite: false
+      }));
+      m.position.copy(c).add(new T.Vector3(s2 * 16, 0.5, 0));
+      scene.add(m);
+      fx.push({ o: m, life: 0.66, max: 0.66, kind: 'core', c: c });
+    }
+
+    /* 三层冲击波：白炽内环、热色中环、当前频率色外环，一圈比一圈慢 */
+    shockRing(new T.Vector3(c.x, 0.24, c.z), 0.4, 9, 0.34, 0xffffff);
+    shockRing(new T.Vector3(c.x, 0.14, c.z), 0.6, 21, 0.66, 0xffd8a0);
+    shockRing(new T.Vector3(c.x, 0.06, c.z), 1.0, R, 0.95, FREQ[(S.freq || 0)]);
+
+    /* 对撞后的次级电弧：从爆心甩向 6 个最近的靶标，把「清屏」画成一张网 */
+    var net = hits.slice(0, 6);
+    for (var ai = 0; ai < net.length; ai++) {
+      bolt(c, new T.Vector3(net[ai].x, 1.0, net[ai].z), net[ai].fq != null ? FREQ[net[ai].fq] : 0x9fd8ff);
+    }
+
+    flashAt(c, null, 11);
+    screenFlash(0.5);
+    S.shake = Math.min(1.5, S.shake + 1.0);
+    puffBurst(c, 80, 0xdfefff, true);
+    toast('宏聚变 · 双核对撞 · ' + hits.length + ' 个靶标归零', 1800);
+    sfx('boss');
+
+    for (var hi = 0; hi < hits.length; hi++) {
+      if (!hits[hi].e.dead) hurt(hits[hi].e, (S.dmg * 10 + 130) * dmgMul(hits[hi].e));
+    }
+  }
+
+  /* 场地能量脉冲：从玩家脚下缓慢推出的一圈扫掠光，只是氛围 */
+  function fieldPulse() {
+    var m = new T.Mesh(new T.TorusGeometry(1, 0.028, 6, 96), new T.MeshBasicMaterial({
+      color: FREQ[(S.freq || 0)], transparent: true, opacity: 0.30, blending: T.AdditiveBlending, depthWrite: false
+    }));
+    m.position.set(S.pos.x, 0.05, S.pos.z);
+    m.rotation.x = -Math.PI / 2;
+    m.scale.setScalar(2);
+    scene.add(m);
+    fx.push({ o: m, life: 2.4, max: 2.4, kind: 'sweep' });
+  }
+
   /* 全屏打击闪光：一次白场，220ms 内回落，不遮挡画面中央的读数 */
   function screenFlash(a) {
     var el = document.getElementById('hitflash');
@@ -886,34 +1041,116 @@ function toggleMute() {
 
   /* ---------- 电弧 ---------- */
   var bolts = [];
-  function bolt(from, to) {
-    var N = 13 + Math.min(7, Math.floor(S.dmg / 4)), pts = new Float32Array(N * 3);
-    for (var i = 0; i < N; i++) {
-      var t = i / (N - 1);
-      var x = from.x + (to.x - from.x) * t;
-      var y = from.y + (to.y - from.y) * t + 0.55;
-      var z = from.z + (to.z - from.z) * t;
-      if (i > 0 && i < N - 1) {
-        var jj = 0.75 + Math.min(1.1, S.dmg * 0.045);
-        x += (Math.random() - 0.5) * jj;
-        y += (Math.random() - 0.5) * jj;
-        z += (Math.random() - 0.5) * jj;
+  /* 中点位移：一条分形折线（递归细分，振幅逐级衰减） */
+  function fracLine(a, b, level, rough, out) {
+    var pts = [a.clone(), b.clone()];
+    var amp = a.distanceTo(b) * rough;
+    for (var lv = 0; lv < level; lv++) {
+      var nx = [];
+      for (var i = 0; i < pts.length - 1; i++) {
+        nx.push(pts[i]);
+        var m = pts[i].clone().add(pts[i + 1]).multiplyScalar(0.5);
+        m.x += (Math.random() - 0.5) * amp;
+        m.y += (Math.random() - 0.5) * amp * 0.7;
+        m.z += (Math.random() - 0.5) * amp;
+        nx.push(m);
       }
-      pts[i * 3] = x; pts[i * 3 + 1] = y; pts[i * 3 + 2] = z;
+      nx.push(pts[pts.length - 1]);
+      pts = nx;
+      amp *= 0.56;
+    }
+    for (var k = 0; k < pts.length; k++) out.push(pts[k]);
+    return out;
+  }
+
+  /* 电弧要「有体积」，光靠 linewidth 不行（WebGL 下恒为 1px）。
+     所以把折线做成朝向相机的三角带（ribbon），宽度按中段最粗、两头收尖。 */
+  function boltRibbon(pts, color, opacity, width, taper) {
+    var n = pts.length;
+    if (n < 2) return null;
+    var pos = new Float32Array(n * 6);
+    var dir = new T.Vector3(), side = new T.Vector3(), camD = new T.Vector3();
+    for (var i = 0; i < n; i++) {
+      var p = pts[i];
+      var q = pts[Math.min(i + 1, n - 1)];
+      var r = pts[Math.max(i - 1, 0)];
+      dir.subVectors(q, r);
+      if (dir.lengthSq() < 1e-8) dir.set(0, 1, 0);
+      camD.subVectors(camera.position, p).normalize();
+      side.crossVectors(dir, camD);
+      if (side.lengthSq() < 1e-9) side.set(0, 0, 1);
+      side.normalize();
+      var f = i / (n - 1);
+      /* 两头收尖，中段最粗：一条电弧看起来才像放电而不是一根棍 */
+      var w = width * ((taper == null ? 1 : taper) * 0.35 + (1 - (taper == null ? 1 : taper) * 0.35) * Math.sin(Math.PI * f));
+      w *= 0.78 + Math.random() * 0.44;   /* 边缘抖动，别让光带看起来像一根塑料棍 */
+      pos[i * 6] = p.x + side.x * w; pos[i * 6 + 1] = p.y + side.y * w; pos[i * 6 + 2] = p.z + side.z * w;
+      pos[i * 6 + 3] = p.x - side.x * w; pos[i * 6 + 4] = p.y - side.y * w; pos[i * 6 + 5] = p.z - side.z * w;
     }
     var g = new T.BufferGeometry();
-    g.setAttribute('position', new T.BufferAttribute(pts, 3));
+    g.setAttribute('position', new T.BufferAttribute(pos, 3));
+    var idx = [];
+    for (var j = 0; j < n - 1; j++) {
+      var a2 = j * 2;
+      idx.push(a2, a2 + 1, a2 + 2, a2 + 1, a2 + 3, a2 + 2);
+    }
+    g.setIndex(idx);
+    var mesh = new T.Mesh(g, new T.MeshBasicMaterial({
+      color: color, transparent: true, opacity: opacity, side: T.DoubleSide,
+      blending: T.AdditiveBlending, depthWrite: false
+    }));
+    mesh.frustumCulled = false;
+    scene.add(mesh);
+    return mesh;
+  }
+
+  /* 电弧配色：打同频靶标时转成白热，异频则是它自己的三频色——一眼看出"这一发对上了" */
+  function arcTint(e) {
+    if (!e || e.freq == null) return 0x9fd8ff;
+    return (S.freq === e.freq) ? 0xf4fbff : FREQ[e.freq];
+  }
+
+  /* 双层套色电弧：外宽带（目标频率色，宽 ~0.2 m） + 内白炽核心（细、几乎不抖）。
+     抖动压到原来的六成、分枝收敛到 1–2 条：从「亮而细、乱」变成「有体积、分得清主干」。 */
+  function bolt(from, to, tint) {
+    var a = from.clone(); a.y += 0.55;
+    var b = to.clone(); b.y += 0.55;
+    var len = Math.max(2, a.distanceTo(b));
+    var rough = 0.15 + Math.min(0.10, S.dmg * 0.0035);
     var bc = (S.skin && S.skin.bolt) || 0xd8f0ff;
-    var line = new T.Line(g, new T.LineBasicMaterial({ color: bc, transparent: true, opacity: 1, blending: T.AdditiveBlending, linewidth: 2 }));
-    line.frustumCulled = false;
-    scene.add(line);
-    var halo = new T.Line(g, new T.LineBasicMaterial({ color: 0x3f8cff, transparent: true, opacity: 0.55, blending: T.AdditiveBlending }));
-    halo.frustumCulled = false;
-    scene.add(halo);
-    bolts.push({ o: line, h: halo, life: 0.3, max: 0.3 });
+    var tc = (tint != null) ? tint : 0x3f8cff;
+
+    var core = fracLine(a, b, 5, rough * 0.55, []);
+
+    /* 两层都走同一条折线：核心亮线 + 贴身色晕。
+       路径一致才不会看成「两道电弧各走各的」；不再叠第二层大光带，否则远景下会糊成灰雾 */
+    var parts = [];
+    var bandW = 0.14 + Math.min(0.08, S.dmg * 0.0035);   /* 越强越粗，但别粗成一条带子 */
+    var band = boltRibbon(core, tc, 0.38, bandW, 0.12);
+    if (band) parts.push({ o: band, k: 0.38 });
+    var line = boltRibbon(core, bc, 0.98, 0.055 + Math.min(0.03, S.dmg * 0.0015), 0.22);
+    if (line) parts.push({ o: line, k: 0.98 });
+
+    /* 分叉：1–2 条（原 1–3 条太碎），枝尖带两粒电离火花 */
+    var ex = [];
+    var forks = 1 + (Math.random() < 0.45 ? 1 : 0);
+    for (var f = 0; f < forks; f++) {
+      var si = 2 + Math.floor(Math.random() * Math.max(1, core.length - 6));
+      var p0 = core[si];
+      var p1 = core[Math.min(core.length - 1, si + 2)];
+      var dir = new T.Vector3(p1.x - p0.x, p1.y - p0.y, p1.z - p0.z).normalize();
+      var side = new T.Vector3(Math.random() - 0.5, (Math.random() - 0.5) * 0.7, Math.random() - 0.5).normalize();
+      var tip = p0.clone().add(dir.multiplyScalar(len * (0.14 + Math.random() * 0.10)))
+        .add(side.multiplyScalar(len * (0.10 + Math.random() * 0.14)));
+      var fork = boltRibbon(fracLine(p0, tip, 3, 0.42, []), tc, 0.45, 0.09, 0.2);
+      if (fork) ex.push(fork);
+      sparkBurst(tip, 2, tc);
+    }
+
+    bolts.push({ parts: parts, ex: ex, life: 0.30, max: 0.30 });
     sfx('arc');
-    flashAt(new T.Vector3(from.x, from.y, from.z), null, 1.0);      /* 枪口闪光 */
-    flashAt(new T.Vector3(to.x, to.y, to.z), null, 1.3);          /* 落点闪光 */
+    flashAt(new T.Vector3(from.x, from.y, from.z), null, 0.7);
+    flashAt(new T.Vector3(to.x, to.y, to.z), null, 0.9);
   }
 
   /* ---------- 量子态：击中 → 粒子云 → 被观察才坍缩 ---------- */
@@ -1008,9 +1245,10 @@ function toggleMute() {
   var S = {
     hp: 100, maxHp: 100, lv: 1, xp: 0, need: 5, kills: 0, wave: 1, t: 0,
     paused: false, over: false, fire: 0.55, fireT: 0,
-    dmg: 9, chain: 1, range: 20, shake: 0, iframe: 0, zoom: 1, spd: 7.2, spawnGap: 1.0, spawnT: 0,
+    dmg: 9, chain: 1, range: 20, shake: 0, iframe: 0, zoom: 1, spd: 7.2, spawnGap: 1.0, spawnT: 0, swarmNext: 30, swarmN: 0,
     slow: 0, auraR: 0, evolved: false,
     bid: '', blastR: 2.2, burstN: 3, beamCos: 0.906, reloadOnKill: false, exec: 0, sameT: 0,
+    freq: 0, ultT: 0, comboT: 0, combo: 0, cards: [], trailT: 0,
     pos: new T.Vector3(0, 0, 0), vel: new T.Vector3(), trailI: 0, magnet: 6.0
   };
 
@@ -1096,7 +1334,37 @@ function toggleMute() {
   var mouseNDC = new T.Vector2(0, 0);
   var mouseOn = false;
 
-  addEventListener('keydown', function (e) { keys[e.code] = true; if (e.code === 'KeyM') toggleMute(); else if (e.code === 'KeyD') toggleDemo(); });
+  addEventListener('keydown', function (e) {
+    keys[e.code] = true;
+    if (e.code === 'KeyM') toggleMute();
+    else if (e.code === 'KeyD') toggleDemo();
+    else if (e.code === 'Tab') {
+      e.preventDefault();
+      /* 对频：优先自动锁最近敌人的频率；已经对上了就手动轮换（留给想控场的人） */
+      var ne = nearestEnemy(S.pos, 60);
+      var target = (ne && ne.freq != null) ? ne.freq : -1;
+      if (target >= 0 && target !== S.freq) {
+        S.freq = target;
+        toast('频率自动对齐 · ' + FREQ_NAME[S.freq] + '（同频 +40%）', 1400);
+        flashAt(new T.Vector3(S.pos.x, 0.9, S.pos.z), null, 1.6);
+        shockRing(new T.Vector3(S.pos.x, 0.1, S.pos.z), 0.3, 3.2, 0.28, FREQ[S.freq]);
+        sfx('level');
+      } else {
+        S.freq = ((S.freq || 0) + 1) % 3;
+        toast('频率 · ' + FREQ_NAME[S.freq] + '（同频 +40% / 异频 −10%）', 1500);
+      }
+    } else if (e.code === 'KeyR') macroFusion();
+    else if (e.code === 'KeyH') handStart();
+    else if (e.code === 'KeyC') {
+      /* 换人 / 换坐姿：把手举在习惯的位置，按 C 重新采集中立位 */
+      if (HAND.on) {
+        HAND.cal = { cx: 0.5, cy: 0.5, n: 0, done: false };
+        try { localStorage.removeItem(CAL_KEY); } catch (er) {}
+        handSay('重校准中：手举在习惯的位置别动');
+        toast('正在重新校准手势中立位', 1400);
+      }
+    }
+  });
   addEventListener('keyup', function (e) { keys[e.code] = false; });
   addEventListener('mousemove', function (e) {
     mouseOn = true;
@@ -1201,18 +1469,72 @@ function toggleMute() {
       var k = e.keyCode - 48;
       if (k >= 1 && k <= curPicks.length) {
         e.preventDefault();
-        var u = curPicks[k - 1];
-        var before = { d: S.dmg, f: S.fire };
-        u.apply(); u.st += 1;
-        if (el.stats) { el.stats.classList.add('hi'); setTimeout(function () { el.stats.classList.remove('hi'); }, 1400); }
-        flashAt(S.pos.clone().setY(1.0), null, 9);
-        toast('伤害 ' + before.d.toFixed(1) + ' → ' + S.dmg.toFixed(1) + ' · 间隔 ' + before.f.toFixed(2) + ' → ' + S.fire.toFixed(2) + 's', 1800);
-        S.picked = S.picked || {};
-        S.picked[u.id] = (S.picked[u.id] || 0) + 1;
-        cardEl.classList.remove('on');
-        S.paused = false;
+        pickCard(k - 1);
       }
     });
+  }
+
+  /* 选卡的统一入口：键盘 1/2/3、鼠标点卡、自动脚本 __arena.pickCard(i) 都走这里，
+     避免三份逻辑漂移（以前键盘那份是内联复制的）。 */
+  function chooseCard(u) {
+    if (!u) return false;
+    var bD = S.dmg, bF = S.fire;
+    u.apply(); u.st += 1; delete u._fb;
+    if (el.stats) { el.stats.classList.add('hi'); setTimeout(function () { el.stats.classList.remove('hi'); }, 1400); }
+    toast('伤害 ' + bD.toFixed(1) + ' → ' + S.dmg.toFixed(1) + ' · 间隔 ' + bF.toFixed(2) + ' → ' + S.fire.toFixed(2) + 's', 1800);
+    S.picked = S.picked || {};
+    S.picked[u.id] = (S.picked[u.id] || 0) + 1;
+    upgradeBurst();
+    cardEl.classList.remove('on');
+    curPicks = [];
+    S.cards = [];
+    S.paused = false;
+    return true;
+  }
+
+  /* 选卡瞬间的「升级感」：脚下爆一圈本色冲击波，贴脸的靶标被推开半步 */
+  function upgradeBurst() {
+    var p = new T.Vector3(S.pos.x, 0.9, S.pos.z);
+    var fc = FREQ[(S.freq || 0)];
+    flashAt(p, null, 7);
+    shockRing(new T.Vector3(p.x, 0.06, p.z), 0.3, 8.6, 0.55, fc);
+    shockRing(new T.Vector3(p.x, 0.9, p.z), 0.2, 3.4, 0.34, 0xffffff);
+    sparkBurst(p, 26, fc);
+    puffBurst(p, 16, 0xdfefff, false);
+    screenFlash(0.15);
+    S.shake = Math.min(1.0, S.shake + 0.28);
+    for (var i = 0; i < enemies.length; i++) {
+      var e = enemies[i];
+      if (e.dead) continue;
+      var dx = e.g.position.x - S.pos.x, dz = e.g.position.z - S.pos.z;
+      var d = Math.hypot(dx, dz) || 1;
+      if (d < 3.4) {
+        e.g.position.x += dx / d * (3.4 - d);
+        e.g.position.z += dz / d * (3.4 - d);
+        e.slowT = Math.max(e.slowT || 0, 0.9);
+      }
+    }
+    sfx('level');
+  }
+
+  /* 按序号选卡（0 起）。不传序号 = 选第一张能选的（自动化截图用这个最省事）。
+     返回 true=选中，false=没这张/锁着/面板没开 */
+  function pickCard(i) {
+    if (!cardEl.classList.contains('on')) return false;
+    if (i == null) {
+      for (var j = 0; j < curPicks.length; j++) {
+        var uu = curPicks[j];
+        if (cardOpen(uu) || uu._fb) return chooseCard(uu);
+      }
+      return false;
+    }
+    var u = curPicks[i];
+    if (!u) return false;
+    if (!cardOpen(u) && !u._fb) {
+      toast('读完第 ' + u.ch + ' 章才能解锁 · ' + (u.src || ''), 2600);
+      return false;
+    }
+    return chooseCard(u);
   }
 
   /* 统一的玩家受伤入口：短无敌帧 + 演示模式减半 */
@@ -1276,22 +1598,15 @@ function offerCards() {
     }
     rowEl.innerHTML = '';
     curPicks = [];
-    function choose(u) {
-      var bD = S.dmg, bF = S.fire;
-      u.apply(); u.st += 1; delete u._fb;
-      if (el.stats) { el.stats.classList.add('hi'); setTimeout(function () { el.stats.classList.remove('hi'); }, 1400); }
-      flashAt(S.pos.clone().setY(1.0), null, 9);
-      toast('伤害 ' + bD.toFixed(1) + ' → ' + S.dmg.toFixed(1) + ' · 间隔 ' + bF.toFixed(2) + ' → ' + S.fire.toFixed(2) + 's', 1800);
-      S.picked = S.picked || {};
-      S.picked[u.id] = (S.picked[u.id] || 0) + 1;
-      cardEl.classList.remove('on');
-      S.paused = false;
-    }
     pool.forEach(function (u, i) {
       var d = document.createElement('div');
       d.className = 'card ' + u.rar;
       var locked = !cardOpen(u) && !u._fb;
       if (locked) d.className = 'card ' + u.rar + ' locked';
+      /* 可点的序号：自动化脚本点 .card[data-idx="0"] 也能选卡 */
+      d.setAttribute('data-idx', i);
+      d.dataset.idx = i;
+      d.dataset.uid = u.id;
       var rar = u.rar === 'epic' ? '分支 · 进化' : (u.rar === 'rare' ? (u.br ? '分支 · 专属' : '稀有') : '普通');
       var pips = '';
       if (u.max > 1) { for (var p = 0; p < u.max; p++) pips += (p < u.st ? '<b>●</b>' : '○'); }
@@ -1304,12 +1619,25 @@ function offerCards() {
         '<div class="d">' + u.d + '</div>' +
         '<div class="pips">' + (pips || '') + '</div></div>' +
         '<div class="foot" title="' + (u.src || '').replace(/"/g, '') + '">' + footTxt + '</div>';
-      d.onclick = function () {
-        if (locked) { toast('读完第 ' + u.ch + ' 章才能解锁 · ' + (u.src || ''), 2600); return; }
-        choose(u);
+      d.onclick = function (ev) {
+        if (ev) { ev.stopPropagation(); ev.preventDefault(); }
+        pickCard(i);
       };
       rowEl.appendChild(d);
       curPicks.push(u);
+    });
+    /* 事件委托兜底：自动化点到的可能是卡片里的子元素，冒泡上来一样能选 */
+    if (!cardEl._delegated) {
+      cardEl._delegated = true;
+      cardEl.addEventListener('click', function (ev) {
+        var d = ev.target && ev.target.closest ? ev.target.closest('.card[data-idx]') : null;
+        if (!d) return;
+        var idx = parseInt(d.getAttribute('data-idx'), 10);
+        if (!isNaN(idx)) { ev.preventDefault(); pickCard(idx); }
+      });
+    }
+    S.cards = curPicks.map(function (u2) {
+      return { id: u2.id, n: u2.n, rar: u2.rar, locked: !cardOpen(u2) && !u2._fb, st: u2.st, max: u2.max };
     });
     var lvEl = document.getElementById('cardLv');
     if (lvEl) lvEl.textContent = S.lv;
@@ -1355,6 +1683,10 @@ function offerCards() {
     toastT = (ms || 1800) / 1000;
   }
 
+  var freqDots = document.querySelectorAll('#freqHud .fd');
+  var freqNameEl = document.getElementById('freqName');
+  var ultCdEl = document.getElementById('ultCd');
+
   function hud() {
     el.lv.textContent = S.lv;
     if (el.branch) el.branch.textContent = S.branch;
@@ -1370,6 +1702,20 @@ function offerCards() {
     if (el.stats) el.stats.textContent = '伤害 ' + S.dmg.toFixed(1) + ' · 间隔 ' + S.fire.toFixed(2) + 's · 连锁 ' + S.chain + ' · 索敌 ' + Math.round(S.range) + 'm';
     el.hp.textContent = Math.max(0, Math.round(S.hp));
     el.hpBar.style.width = Math.max(0, (S.hp / S.maxHp) * 100) + '%';
+    /* 底部频率条 + 宏聚变冷却：让「我现在打的是哪个频」不用记 */
+    for (var fd = 0; fd < freqDots.length; fd++) {
+      var on = (fd === (S.freq || 0));
+      if (on !== freqDots[fd].classList.contains('on')) freqDots[fd].classList.toggle('on', on);
+    }
+    if (freqNameEl) freqNameEl.textContent = FREQ_NAME[S.freq || 0];
+    if (ultCdEl) {
+      var cd = Math.ceil(S.ultT || 0);
+      var txt = cd > 0 ? ('宏聚变 ' + cd + 's') : 'R 就绪';
+      if (ultCdEl.textContent !== txt) {
+        ultCdEl.textContent = txt;
+        ultCdEl.classList.toggle('ready', cd <= 0);
+      }
+    }
   }
 
   var overEl = document.getElementById('over');
@@ -1409,6 +1755,8 @@ function offerCards() {
   }
 
   function hurt(e, amount) {
+    var _same = (e.freq != null && S.freq != null && e.freq === S.freq);
+    if (e.freq != null && S.freq != null) amount *= (_same ? 1.40 : 0.90);
     e.hp -= amount;
     e.flash = 0.17;
     e.jit = 0.1;
@@ -1416,13 +1764,21 @@ function offerCards() {
     var _heavy = amount >= 18;
     S.hitStop = Math.max(S.hitStop, _heavy ? 0.075 : 0.032);
     S.shake = Math.min(1.0, S.shake + (_heavy ? 0.16 : 0.055));
-    if (S.slow > 0) e.slowT = 1.6;
+    if (S.slow > 0 || S.lv >= 8) { e.slowT = 1.6; e.stasisOn = true; }
     var p = new T.Vector3(e.g.position.x, 1.1, e.g.position.z);
     damageNumber(p, Math.round(amount));
     hitBurst(p, 0.85);
     sfx('hit', 0.8 + Math.random() * 0.5);
     puffBurst(p, 10, (S.skin && S.skin.bolt) || 0xbfe6ff, false);
     decalAt(new T.Vector3(e.g.position.x, 0.03, e.g.position.z));
+    /* 同频共振：命中的那一瞬炸出一圈同色共振环，让「对频」在手上看得见 */
+    if (_same && e.freq != null) {
+      var fc = FREQ[e.freq];
+      shockRing(new T.Vector3(p.x, 0.14, p.z), 0.25, 2.5 + Math.random() * 0.7, 0.24, fc);
+      sparkBurst(p, 4, fc);
+      e.jit = 0.16;
+      S.shake = Math.min(1.0, S.shake + 0.03);
+    }
     if (e.isBoss && e.phase === 'solid') {
       for (var ti = 0; ti < e.thresholds.length; ti++) {
         if (e.hp / e.max <= e.thresholds[ti] && e.useT <= ti) {
@@ -1446,6 +1802,15 @@ function offerCards() {
       e.dead = true;
       if (e.isBoss) { S.bossNext = S.t + 75; toast('试验车解体 · 下一辆 75 秒后进场', 2000); }
       S.kills += 1;
+      /* 连杀：1.1 秒内接着击杀就叠一层，4 的倍数报一次——割草的节奏感来自这里 */
+      S.combo = (S.comboT > 0 ? (S.combo || 0) + 1 : 1);
+      S.comboT = 1.1;
+      if (e.isBoss) buzz([26, 30, 60]); else buzz(14);
+      if (S.combo >= 4 && S.combo % 4 === 0) {
+        toast('连杀 ×' + S.combo, 900);
+        screenFlash(0.06 + Math.min(0.10, S.combo * 0.008));
+        S.shake = Math.min(1.1, S.shake + 0.06);
+      }
       if (S.reloadOnKill) S.fireT = 0;
       S.shake = Math.min(0.95, S.shake + 0.26 * ((S.skin && S.skin.shake) || 1));
       quantumCloud(new T.Vector3(e.g.position.x, 0.2, e.g.position.z));
@@ -1454,6 +1819,9 @@ function offerCards() {
       sfx('kill');
       screenFlash(e.isBoss ? 0.30 : 0.13);
       shockRing(new T.Vector3(e.g.position.x, 0.08, e.g.position.z), 0.4, 7.6, 0.62, 0xeaf6ff);
+      /* 内塌环：外圈还在扩散时，内圈反向收拢——先把靶标"吸"没，再留空泡 */
+      shockRing(new T.Vector3(e.g.position.x, 0.12, e.g.position.z), 6.2, 0.15, 0.34, (e.freq != null ? FREQ[e.freq] : 0xbfe6ff));
+      voidBubble(new T.Vector3(e.g.position.x, 0.9, e.g.position.z));
       sparkBurst(new T.Vector3(e.g.position.x, 0.9, e.g.position.z), 22);
       S.hitStop = Math.max(S.hitStop, e.isBoss ? 0.13 : 0.085);
     }
@@ -1472,6 +1840,365 @@ function offerCards() {
     }
   }
 
+  /* ================= 手势：把手当虚拟摇杆 =================
+     为什么不是原来的写法：以前读父窗口的 HB.x 做「绝对位置写入」，手一抖角色就抖、推到头也够不到场地边缘、
+     手出画瞬间弹回中线；而且父窗口一进实验模式 __handsTick 就停摆，等于手势根本没在动。
+     现在换成摇杆：手偏离画面中心 = 推杆，位移走 dirV × S.spd，和键盘同一条出口；捏合 = 扳机，
+     按下立刻一发、按住把射速压到 1.7 倍，而不是原来那 33 发/秒。
+     参照：Handsfree.js 的 pinchers（阈值 + 连续帧确认 + 边沿触发一次）、palmPointers（以中心为原点的增益）、
+     Casiez 1€ filter（这里用等价的一阶低通；输入已经过 MediaPipe 自己的跟踪，不必再串一层）。
+  */
+  var HAND_BASE = '../assets/hands/';
+  var HAND = {
+    on: false, state: 'off', msg: '',
+    u: 0, v: 0, mag: 0, dx: 0, dz: -1,
+    tu: 0, tv: 0,
+    pinchR: 1, fire: false, fireEdge: false, pinN: 0,
+    present: false, lost: 0,
+    video: null, stream: null, worker: null, ready: false,
+    lastFrame: 0, fpsAcc: 0, fpsN: 0, hz: 0, err: '', uiT: 0,
+    lm: null, lmS: null, skelT: 0, ctx: null,
+    cal: { cx: 0.5, cy: 0.5, n: 0, done: false },
+    el: {}
+  };
+  /* 校准：每个人坐的位置、手举的高低都不一样，掌心常驻点很少正好在画面正中。
+     开摄像头后先采样 ~1.2 秒当「中立位」，之后推杆都相对它算；结果存下来，
+     下次直接用，想重来在开着手势时按 C。 */
+  var CAL_KEY = 'bl.handCal';
+  (function loadCal() {
+    try {
+      var raw = localStorage.getItem(CAL_KEY);
+      if (!raw) return;
+      var o = JSON.parse(raw);
+      if (o && isFinite(o.cx) && isFinite(o.cy)) HAND.cal = { cx: o.cx, cy: o.cy, n: 99, done: true };
+    } catch (e) {}
+  })();
+  function handEl() {
+    if (!HAND.el.box) {
+      HAND.el = {
+        box: document.getElementById('handBox'),
+        btn: document.getElementById('handBtn'),
+        pad: document.getElementById('handPad'),
+        dot: document.getElementById('handDot'),
+        cam: document.getElementById('handCam'),
+        camWrap: document.getElementById('handCamWrap'),
+        skel: document.getElementById('handSkel'),
+        tag: document.getElementById('handTag'),
+        msg: document.getElementById('handMsg')
+      };
+    }
+    return HAND.el;
+  }
+  function handUi() {
+    var e = handEl();
+    if (e.box) e.box.setAttribute('data-state', HAND.state);
+    if (e.btn) e.btn.setAttribute('aria-pressed', HAND.on ? 'true' : 'false');
+    if (e.msg) e.msg.textContent = HAND.msg || (HAND.state === 'off' ? '点小屏或「手势」开摄像头' : '');
+  }
+  function handSay(m) { HAND.msg = m || ''; handUi(); }
+
+  function handState() {
+    return {
+      on: HAND.on, state: HAND.state, err: HAND.err,
+      u: +HAND.u.toFixed(2), v: +HAND.v.toFixed(2), mag: +HAND.mag.toFixed(2),
+      pinchR: +HAND.pinchR.toFixed(2), fire: !!HAND.fire, present: !!HAND.present,
+      ready: !!HAND.ready, hz: HAND.hz,
+      cal: { done: !!HAND.cal.done, n: HAND.cal.n, cx: +HAND.cal.cx.toFixed(3), cy: +HAND.cal.cy.toFixed(3) }
+    };
+  }
+
+  function handWorker() {
+    if (HAND.worker) return;
+    try {
+      HAND.worker = new Worker(HAND_BASE + 'hand-worker.js');
+    } catch (err) {
+      HAND.err = String(err);
+      HAND.state = 'denied';
+      /* file:// 打开时 Worker 会被同源策略拦（origin 'null'），这句要说明白，
+         否则界面上只会停在「正在加载手部模型…」，看着像坏了 */
+      var fileProto = location.protocol === 'file:';
+      handSay(fileProto
+        ? '手势线程起不来：请用 http 打开（file:// 下浏览器不让起 Worker）'
+        : '手势线程起不来（' + (err && err.message || err) + '）');
+      return;
+    }
+    HAND.worker.onmessage = function (ev) {
+      var m = ev.data || {};
+      if (m.type === 'ready') {
+        HAND.ready = true;
+        if (HAND.state === 'loading') { HAND.state = 'live'; handSay('手在画面里推杆走位 · 捏合放电'); }
+        handUi();
+        return;
+      }
+      if (m.type === 'error') {
+        HAND.err = (m.stage || '?') + ': ' + (m.message || '');
+        if (!HAND.hz) handSay('推理出错：' + HAND.err);
+        return;
+      }
+      if (m.type === 'hands') { handIngest(m.hands && m.hands[0]); return; }
+      if (m.type === 'empty') { if (HAND.hold) return; HAND.present = false; HAND.lost = 0; HAND.lm = null; return; }
+    };
+    HAND.worker.postMessage({
+      type: 'init',
+      wasmPath: new URL(HAND_BASE + 'wasm', location.href).href,
+      modelPath: new URL(HAND_BASE + 'hand_landmarker.task', location.href).href
+    });
+  }
+
+  /* 21 个关键点 → 摇杆输入。画面中心是 0，掌心走到 14%~86% 就推满，
+     补回「手不能真的出画」损失的行程；u 取镜像，手往自己右边挪 = 角色往右。 */
+  function handIngest(h) {
+    if (!h) { HAND.present = false; HAND.lost = 0; HAND.lm = null; return; }
+    var lm = h.landmarks || h;
+    if (!lm || lm.length < 21) { HAND.present = false; return; }
+    HAND.present = true; HAND.lost = 0;
+    HAND.lm = lm;
+    var palm = lm[9];
+    var sw = Math.hypot(lm[5].x - lm[17].x, lm[5].y - lm[17].y);
+    if (!(sw > 1e-4)) sw = 1e-4;
+    HAND.pinchR = Math.hypot(lm[4].x - lm[8].x, lm[4].y - lm[8].y) / sw;
+    /* 中立位校准：没校准时先只采样、不推杆（约 1.2 秒 / 18 帧），
+       免得刚开手就因为掌心偏左而自己往左跑 */
+    var cal = HAND.cal;
+    if (!cal.done) {
+      cal.n += 1;
+      cal.cx += (palm.x - cal.cx) / cal.n;
+      cal.cy += (palm.y - cal.cy) / cal.n;
+      HAND.tu = 0; HAND.tv = 0;
+      if (cal.n >= 18) {
+        cal.done = true;
+        try { localStorage.setItem(CAL_KEY, JSON.stringify({ cx: +cal.cx.toFixed(4), cy: +cal.cy.toFixed(4) })); } catch (e) {}
+        handSay('已按你的手校准中立位（换人/换位置按 C 重来）');
+      }
+      return;
+    }
+    HAND.tu = Math.max(-1, Math.min(1, (cal.cx - palm.x) / 0.36));
+    HAND.tv = Math.max(-1, Math.min(1, (palm.y - cal.cy) / 0.28));
+  }
+
+  /* ---------- 手指骨架叠在摄像头小屏上 ----------
+     参照的就是用户发来的那种「LIDAR FEED」画法：21 个点 + 手部连线，
+     指尖亮、指节暗，捏合时拇指尖到食指尖连一条金线。颜色跟当前频率走。 */
+  var HAND_LINKS = [
+    [0, 1], [1, 2], [2, 3], [3, 4],
+    [0, 5], [5, 6], [6, 7], [7, 8],
+    [5, 9], [9, 10], [10, 11], [11, 12],
+    [9, 13], [13, 14], [14, 15], [15, 16],
+    [13, 17], [17, 18], [18, 19], [19, 20],
+    [0, 17]
+  ];
+  var HAND_TIPS = { 4: 1, 8: 1, 12: 1, 16: 1, 20: 1 };
+
+  function handPaint() {
+    var e = handEl(), cv = e.skel;
+    if (!cv) return;
+    var ctx = HAND.ctx || (HAND.ctx = cv.getContext && cv.getContext('2d'));
+    if (!ctx) return;
+    var W = cv.width, H = cv.height;
+    ctx.clearRect(0, 0, W, H);
+    if (!HAND.lm) return;   /* 标签显示与否交给 #handBox[data-present] 的 CSS，别在这里写 inline 样式 */
+    /* 先压一层薄暗底：霓虹线压在花花绿绿的摄像头画面上会散，压一点反而更清楚 */
+    ctx.fillStyle = 'rgba(4,10,18,.22)';
+    ctx.fillRect(0, 0, W, H);
+
+    /* 平滑：关键点逐帧轻微抖动，直接画会像在抖筛子 */
+    if (!HAND.lmS || HAND.lmS.length !== HAND.lm.length) {
+      HAND.lmS = HAND.lm.map(function (p) { return { x: p.x, y: p.y }; });
+    } else {
+      for (var s = 0; s < HAND.lm.length; s++) {
+        HAND.lmS[s].x += (HAND.lm[s].x - HAND.lmS[s].x) * 0.45;
+        HAND.lmS[s].y += (HAND.lm[s].y - HAND.lmS[s].y) * 0.45;
+      }
+    }
+
+    var fc = '#' + ('000000' + (FREQ[S.freq || 0] & 0xffffff).toString(16)).slice(-6);
+    var P = function (i) { return { x: HAND.lmS[i].x * W, y: HAND.lmS[i].y * H }; };
+    var pulse = 0.72 + 0.28 * Math.sin((S.t || 0) * 5.4);
+
+    /* 掌心连接的光带 */
+    ctx.save();
+    ctx.lineCap = 'round';
+    ctx.lineJoin = 'round';
+    ctx.shadowColor = fc;
+    ctx.shadowBlur = 14;
+    ctx.strokeStyle = fc;
+    ctx.globalAlpha = 0.95;
+    ctx.lineWidth = 4.2;
+    ctx.beginPath();
+    for (var b = 0; b < HAND_LINKS.length; b++) {
+      var a1 = P(HAND_LINKS[b][0]), a2 = P(HAND_LINKS[b][1]);
+      ctx.moveTo(a1.x, a1.y);
+      ctx.lineTo(a2.x, a2.y);
+    }
+    ctx.stroke();
+
+    /* 关节点：指尖更大更亮（画布 2 倍超采样，视觉上约 1.6~2.6 CSS px） */
+    for (var j = 0; j < HAND.lmS.length; j++) {
+      var q = P(j);
+      var tip = HAND_TIPS[j];
+      ctx.globalAlpha = 1;
+      ctx.shadowColor = tip ? '#ffffff' : fc;
+      ctx.shadowBlur = tip ? 16 * pulse : 9;
+      ctx.fillStyle = tip ? '#f4fcff' : 'rgba(220,244,255,.92)';
+      ctx.beginPath();
+      ctx.arc(q.x, q.y, tip ? 5.4 : 3.4, 0, Math.PI * 2);
+      ctx.fill();
+    }
+
+    /* 捏合：拇指尖 ↔ 食指尖一条金线 + 中点光环，正好对上「扳机」这件事 */
+    if (HAND.fire) {
+      var t4 = P(4), t8 = P(8);
+      ctx.globalAlpha = 0.6 + 0.4 * pulse;
+      ctx.shadowColor = '#ffd08a';
+      ctx.shadowBlur = 16;
+      ctx.strokeStyle = '#ffd08a';
+      ctx.lineWidth = 4.4;
+      ctx.beginPath();
+      ctx.moveTo(t4.x, t4.y);
+      ctx.lineTo(t8.x, t8.y);
+      ctx.stroke();
+      ctx.beginPath();
+      ctx.arc((t4.x + t8.x) / 2, (t4.y + t8.y) / 2, 10 + 5 * pulse, 0, Math.PI * 2);
+      ctx.stroke();
+    }
+    ctx.restore();
+  }
+
+  function handStop() {
+    HAND.on = false; HAND.state = 'off'; HAND.ready = false;
+    HAND.fire = false; HAND.fireEdge = false; HAND.mag = 0; HAND.u = 0; HAND.v = 0;
+    HAND.tu = 0; HAND.tv = 0; HAND.present = false;
+    HAND.lm = null; HAND.lmS = null;
+    if (HAND.ctx && HAND.el.skel) HAND.ctx.clearRect(0, 0, HAND.el.skel.width, HAND.el.skel.height);
+    try { if (HAND.stream) HAND.stream.getTracks().forEach(function (t) { t.stop(); }); } catch (e) {}
+    HAND.stream = null;
+    if (HAND.video) { try { HAND.video.pause(); } catch (e) {} HAND.video.srcObject = null; HAND.video = null; }
+    var e = handEl();
+    if (e.cam) { try { e.cam.srcObject = null; } catch (er) {} }
+    if (HAND.worker) { try { HAND.worker.postMessage({ type: 'reset' }); HAND.worker.terminate(); } catch (er2) {} HAND.worker = null; }
+    handSay('手势已关 · 鼠标 / WASD 照旧');
+    handUi();
+  }
+
+  function handStart() {
+    if (HAND.on) { handStop(); return; }
+    if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
+      HAND.state = 'denied'; handSay('这台设备没有摄像头接口，用鼠标 / WASD'); handUi(); return;
+    }
+    HAND.state = 'loading'; handSay('正在要摄像头…'); handUi();
+    navigator.mediaDevices.getUserMedia({ video: { facingMode: 'user', width: 640, height: 480 }, audio: false })
+      .then(function (st) {
+        HAND.stream = st;
+        var v = document.createElement('video');
+        v.autoplay = true; v.playsInline = true; v.muted = true;
+        v.srcObject = st;
+        var p = v.play(); if (p && p.catch) p.catch(function () {});
+        HAND.video = v;
+        var e = handEl();
+        if (e.cam) { e.cam.srcObject = st; var q = e.cam.play(); if (q && q.catch) q.catch(function () {}); }
+        handWorker();
+        HAND.on = true;
+        /* handWorker() 失败时已经把状态写成 denied 并给了原因，
+           这里不能再覆盖成 loading，否则界面永远停在「正在加载手部模型…」 */
+        if (HAND.state === 'denied') {
+          toast('摄像头已通，但手部模型线程没起来（file:// 下浏览器不允许）', 3600);
+          handUi();
+          return;
+        }
+        HAND.state = HAND.ready ? 'live' : 'loading';
+        handSay('手偏离画面中心 = 推杆 · 捏合 = 放电');
+        toast('手势已开 · 手在画面里左右上下推 = 走位，捏合 = 放电（再点一下关掉）', 3400);
+        handUi();
+      })
+      .catch(function (err) {
+        HAND.on = false; HAND.state = 'denied';
+        handSay('摄像头没开成：' + (err && err.name === 'NotAllowedError' ? '你拒绝了权限' : (err && err.message || '未知原因')));
+        handUi();
+      });
+  }
+
+  /* 每帧调用：抓帧（15Hz）→ 摇杆平滑 → 捏合状态机。放在 loop 里而不是 tick 里，
+     因为 tick 在顿帧和结算时会提前 return，手会一顿一顿。 */
+  function handTick(dt) {
+    if (!HAND.on) {
+      HAND.mag = 0; HAND.fire = false; HAND.fireEdge = false;
+      HAND.lm = null; HAND.lmS = null;
+      if (HAND.ctx && HAND.el.skel) HAND.ctx.clearRect(0, 0, HAND.el.skel.width, HAND.el.skel.height);
+      return;
+    }
+
+    var now = performance.now();
+    if (HAND.video && HAND.ready && HAND.video.readyState >= 2 && now - HAND.lastFrame > 66) {
+      HAND.lastFrame = now;
+      HAND.fpsN++;
+      createImageBitmap(HAND.video).then(function (bm) {
+        try { HAND.worker.postMessage({ type: 'frame', bitmap: bm, ts: now }, [bm]); }
+        catch (err) { try { bm.close(); } catch (e2) {} }
+      }).catch(function () {});
+    }
+    HAND.fpsAcc += dt;
+    if (HAND.fpsAcc > 1) { HAND.hz = Math.round(HAND.fpsN / HAND.fpsAcc); HAND.fpsAcc = 0; HAND.fpsN = 0; }
+
+    /* 丢手：250ms 宽限（15Hz 抓帧偶发掉一帧），之后 180ms 滑停，不做瞬移 */
+    if (!HAND.present) {
+      HAND.lost += dt;
+      if (HAND.lost > 0.25) {
+        var dec = Math.pow(0.02, dt / 0.18);
+        HAND.tu *= dec; HAND.tv *= dec;
+        HAND.fire = false;
+        if (handEl().box) handEl().box.classList.remove('firing');
+      }
+    }
+
+    /* 死区 + 60ms 一阶低通：自然悬停的抖动不会变成走位，也不追加那种 300ms 的串联滞后 */
+    var DZ = (HAND.state === 'fallback') ? 0.22 : 0.10;
+    var tu = HAND.tu, tv = HAND.tv;
+    var m0 = Math.hypot(tu, tv);
+    if (m0 < DZ) { tu = 0; tv = 0; }
+    else {
+      var sc = (m0 - DZ) / (1 - DZ);
+      tu = tu / m0 * sc; tv = tv / m0 * sc;
+    }
+    var k = 1 - Math.exp(-dt / 0.06);
+    HAND.u += (tu - HAND.u) * k;
+    HAND.v += (tv - HAND.v) * k;
+    var mag = Math.hypot(HAND.u, HAND.v);
+    HAND.mag = Math.min(1, mag);
+    if (mag > 1e-3) { HAND.dx = HAND.u / mag; HAND.dz = HAND.v / mag; }
+
+    /* 捏合：双阈值 + 连续 2 帧确认（15Hz 下约 133ms），降级路径不认捏合 */
+    var want = HAND.fire ? (HAND.pinchR < 0.52) : (HAND.pinchR < 0.40);
+    if (HAND.state === 'fallback') want = false;
+    if (want === HAND.fire) HAND.pinN = 0;
+    else if (++HAND.pinN >= 2) {
+      HAND.fire = want; HAND.pinN = 0;
+      if (want) { HAND.fireEdge = true; buzz(12); }
+      var b = handEl().box;
+      if (b) b.classList.toggle('firing', !!want);
+    }
+
+    /* 摇杆指示 + 小屏状态：每 50ms 动一次 DOM 就够 */
+    HAND.uiT += dt;
+    if (HAND.uiT > 0.05) {
+      HAND.uiT = 0;
+      var e = handEl();
+      if (e.dot) e.dot.style.transform = 'translate(' + (HAND.u * 30).toFixed(1) + 'px,' + (HAND.v * 30).toFixed(1) + 'px)';
+      if (e.box) e.box.setAttribute('data-present', HAND.present ? '1' : '0');
+      /* 小屏下面那行字要说人话：看得见手 / 看不见手 / 模型没起来，
+         否则用户不知道是摄像头坏了、手出画了，还是线程根本没起 */
+      var say = HAND.state === 'denied'
+        ? (HAND.msg || '手势线程没起来')
+        : (HAND.present
+          ? (HAND.fire ? '已识别 · 捏合放电中' : '已识别 · 推杆走位')
+          : (HAND.ready ? '画面里没看到手' : '正在加载手部模型…'));
+      if (e.msg && e.msg.textContent !== say) e.msg.textContent = say;
+    }
+
+    /* 骨架 30Hz 重画：跟关键点同频会比视频还快，看起来发飘 */
+    HAND.skelT += dt;
+    if (HAND.skelT > 0.033) { HAND.skelT = 0; handPaint(); }
+  }
+
   function tick(dt) {
     if (S.over) return;
 
@@ -1483,16 +2210,17 @@ function offerCards() {
     }
 
 
-    /* 移动 */
+    /* 移动：键盘 / 鼠标 / 手势摇杆，三个来源叠进同一个方向，再按模长限速 */
     var mx = 0, mz = 0;
     if (keys.KeyW || keys.ArrowUp) mz -= 1;
     if (keys.KeyS || keys.ArrowDown) mz += 1;
     if (keys.KeyA || keys.ArrowLeft) mx -= 1;
     if (keys.KeyD || keys.ArrowRight) mx += 1;
     var dirV = new T.Vector3(mx, 0, mz);
-    if (dirV.lengthSq() > 0) dirV.normalize();
+    if (HAND.mag > 0.02) { dirV.x += HAND.dx * HAND.mag; dirV.z += HAND.dz * HAND.mag; }
 
-    if (mouseOn) {
+    /* 手在推杆时鼠标让位，否则两者对着拉；手不动时鼠标手感与以前一模一样 */
+    if (mouseOn && HAND.mag <= 0.05) {
       var mp = mouseWorld();
       if (mp) {
         var dx = mp.x - S.pos.x, dz = mp.z - S.pos.z;
@@ -1500,7 +2228,11 @@ function offerCards() {
         if (d > 0.8) { dirV.x += dx / d * 0.8; dirV.z += dz / d * 0.8; dirV.normalize(); }
       }
     }
-    S.pos.addScaledVector(dirV, S.spd * dt);
+    /* 摇杆推一半就走一半速度；键盘一按仍然是满速（和改前逐帧等价） */
+    var magIn = 1;
+    if (HAND.mag > 0.02) magIn = Math.min(1, dirV.length());
+    if (dirV.lengthSq() > 0) dirV.normalize();
+    S.pos.addScaledVector(dirV, S.spd * dt * magIn);
     if (S.tether > 0) {
       var tr = Math.hypot(S.pos.x, S.pos.z);
       if (tr > S.tether) { S.pos.x = S.pos.x / tr * S.tether; S.pos.z = S.pos.z / tr * S.tether; }
@@ -1585,12 +2317,30 @@ function offerCards() {
     var stg = stageAt(S.t);
     if (S.spawnT <= 0) {
       S.spawnT = S.spawnGap / stg.mult;
-      var nSpawn = 1 + Math.floor(S.t / 45);
+      var nSpawn = 1 + Math.floor(S.t / 38);
       for (var k = 0; k < nSpawn; k++) {
         var pool = stg.pool;
         if (S.bias && S.bias !== 'mix' && Math.random() < 0.45) pool = [S.bias];
         spawn(pool[Math.floor(Math.random() * pool.length)]);
       }
+    }
+
+    /* 蜂群潮：每 30 秒一波无人机群压上来，先把画面填满再谈割草 */
+    if (S.t >= S.swarmNext) {
+      S.swarmNext += 30;
+      S.swarmN += 1;
+      var swarmN = Math.min(28, 8 + S.swarmN * 4);
+      for (var sk = 0; sk < swarmN; sk++) {
+        var ring = 1 + (sk % 3);                       /* 三圈同心，间隔 3.2 m */
+        var jitter = (Math.random() - 0.5) * 0.34;
+        spawn('drone', 2.6, (sk / swarmN) * Math.PI * 2 + jitter, 15 + ring * 3.2);
+      }
+      S.shake = Math.min(0.55, S.shake + 0.18);
+      shockRing(new T.Vector3(S.pos.x, 0.12, S.pos.z), 1.2, 9.5, 0.42, 0x9fd8ff);
+      shockRing(new T.Vector3(S.pos.x, 0.30, S.pos.z), 0.8, 5.2, 0.30, 0xffffff);
+      screenFlash(0.10);
+      sfx('thud');
+      toast('蜂群潮 · 第 ' + S.swarmN + ' 波 · ' + swarmN + ' 架无人机', 2000);
     }
 
     /* 敌人 */
@@ -1604,7 +2354,33 @@ function offerCards() {
         var adx = e.g.position.x - S.pos.x, adz = e.g.position.z - S.pos.z;
         if (adx * adx + adz * adz < S.auraR * S.auraR) spMul *= 0.65;
       }
-      if (e.slowT > 0) e.slowT -= dt;
+      if (e.slowT > 0) {
+        e.slowT -= dt;
+        /* Lv8 迟滞可视化：被冻住的靶标套一圈冷色晶格点，转起来 = 时间被拖慢 */
+        if (S.lv >= 8) {
+          if (!e.stasis) {
+            var sN = 10, sArr = new Float32Array(sN * 3);
+            for (var sj = 0; sj < sN; sj++) {
+              var sa = (sj / sN) * Math.PI * 2;
+              var srr = sj % 2 ? 1.05 : 0.78;
+              sArr[sj * 3] = Math.cos(sa) * srr;
+              sArr[sj * 3 + 1] = (sj % 2 ? 0.28 : -0.1) + Math.sin(sa * 2) * 0.12;
+              sArr[sj * 3 + 2] = Math.sin(sa) * srr;
+            }
+            var sGeo = new T.BufferGeometry();
+            sGeo.setAttribute('position', new T.BufferAttribute(sArr, 3));
+            e.stasis = new T.Points(sGeo, new T.PointsMaterial({
+              color: 0xb98cff, size: 0.13, transparent: true, opacity: 0.85,
+              blending: T.AdditiveBlending, depthWrite: false
+            }));
+            e.stasis.frustumCulled = false;
+            e.g.add(e.stasis);
+          }
+          e.stasis.visible = true;
+          e.stasis.rotation.y += dt * 2.6;
+          e.stasis.material.opacity = Math.min(0.9, e.slowT * 0.9);
+        } else if (e.stasis) e.stasis.visible = false;
+      } else if (e.stasis && e.stasis.visible) e.stasis.visible = false;
       e.g.position.x += ddx / dist * e.sp * spMul * dt;
       e.g.position.z += ddz / dist * e.sp * spMul * dt;
       e.g.rotation.y = Math.atan2(ddx, ddz);
@@ -1634,8 +2410,15 @@ function offerCards() {
       }
     }
 
+    /* 手势扳机：按下去立刻给一发（有反应），按住把射速压到 1.7 倍——
+       不再像以前那样直接写 S.fireT = 0.03，那等于 33 发/秒，整套升级卡的射速经济全废 */
+    if (HAND.fireEdge) {
+      HAND.fireEdge = false;
+      if (nearestEnemy(S.pos, S.range)) S.fireT = Math.min(S.fireT, 0.05);
+    }
+
     /* 自动放电 */
-    S.fireT -= dt;
+    S.fireT -= dt * (HAND.fire ? 1.7 : 1);
     if (S.fireT <= 0) {
       var mode = S.mode || 'chain';
       var from = new T.Vector3(S.pos.x, 0.7, S.pos.z);
@@ -1646,7 +2429,20 @@ function offerCards() {
         if (tgt) {
           S.fireT = S.fire;
           var to = new T.Vector3(tgt.g.position.x, 0.9, tgt.g.position.z);
-          bolt(from, to);
+          bolt(from, to, arcTint(tgt));
+          /* Lv4 起：主束两侧各补一道偏轴电弧（构筑二段） */
+          if (S.lv >= 4) {
+            var sideA = new T.Vector3(to.x - from.x, 0, to.z - from.z);
+            var lenA = Math.max(1, sideA.length());
+            sideA.normalize();
+            var perp = new T.Vector3(-sideA.z, 0, sideA.x);
+            for (var sf = -1; sf <= 1; sf += 2) {
+              var off = perp.clone().multiplyScalar(sf * (2.2 + Math.min(4, S.lv * 0.4)));
+              var tip = new T.Vector3(to.x + off.x, to.y, to.z + off.z);
+              bolt(from, tip, arcTint(tgt));
+              hurt(tgt, S.dmg * (S.lv >= 8 ? 0.30 : 0.18) * dmgMul(tgt));
+            }
+          }
           flashAt(to.clone().add(new T.Vector3(0, 0.3, 0)), null, 3.4 + Math.min(3.0, S.dmg * 0.22));
           S.shake = Math.min(0.7, S.shake + 0.3);
           hurt(tgt, S.dmg * dmgMul(tgt));
@@ -1667,7 +2463,7 @@ function offerCards() {
         picked.slice(0, S.burstN).forEach(function (e4) {
           if (e4.dead || e4.g.position.distanceTo(S.pos) > S.range) return;
           hitAny = true;
-          bolt(from, new T.Vector3(e4.g.position.x, 0.9, e4.g.position.z));
+          bolt(from, new T.Vector3(e4.g.position.x, 0.9, e4.g.position.z), arcTint(e4));
           hurt(e4, S.dmg * 0.55 * dmgMul(e4));
         });
         if (hitAny) S.fireT = S.fire;
@@ -1683,7 +2479,7 @@ function offerCards() {
           var cos5 = (-dz5) / (d5 || 1);
           if (cos5 < S.beamCos) continue;
           got = true;
-          bolt(from, new T.Vector3(e5.g.position.x, 0.9, e5.g.position.z));
+          bolt(from, new T.Vector3(e5.g.position.x, 0.9, e5.g.position.z), arcTint(e5));
           if (Math.random() < S.exec) { hurt(e5, 1e6); continue; }
           if (S.noteT) e5.slowT = 2.0;
           hurt(e5, S.dmg * 1.15 * dmgMul(e5));
@@ -1695,7 +2491,7 @@ function offerCards() {
         if (target) {
           S.fireT = S.fire;
           var to2 = new T.Vector3(target.g.position.x, 0.9, target.g.position.z);
-          bolt(from, to2);
+          bolt(from, to2, arcTint(target));
           flashAt(from.clone().add(new T.Vector3(0, 0.2, 0)), to2.clone().sub(from).normalize(), 1.8);
           var dm = S.dmg * dmgMul(target);
       if (S.sameT && S.lastTarget === target) { S.sameCount = Math.min(3, (S.sameCount || 0) + 1); }
@@ -1713,7 +2509,7 @@ function offerCards() {
               if (dd < nd && dd > 0.5) { nd = dd; nxt = e2; }
             }
             if (!nxt) break;
-            bolt(new T.Vector3(cur.g.position.x, 0.9, cur.g.position.z), new T.Vector3(nxt.g.position.x, 0.9, nxt.g.position.z));
+            bolt(new T.Vector3(cur.g.position.x, 0.9, cur.g.position.z), new T.Vector3(nxt.g.position.x, 0.9, nxt.g.position.z), arcTint(nxt));
             hurt(nxt, S.dmg * 0.6 * dmgMul(nxt));
             cur = nxt; chained++;
           }
@@ -1852,6 +2648,32 @@ function offerCards() {
         f.o.scale.setScalar(rr);
         f.o.material.opacity = Math.pow(k, 0.6);
       }
+      else if (f.kind === 'void') {
+        var vk = 1 - k;
+        f.o.scale.setScalar(0.3 + 2.0 * (1 - Math.pow(1 - vk, 2.2)));
+        f.o.rotation.y += dt * 1.6;
+        f.o.rotation.x += dt * 0.7;
+        f.o.material.opacity = 0.85 * Math.pow(k, 1.4);
+      }
+      else if (f.kind === 'vac') {
+        var pa2 = f.geo.attributes.position.array;
+        for (var vi = 0; vi < f.v.length; vi++) {
+          pa2[vi * 3] += f.v[vi].x * dt;
+          pa2[vi * 3 + 1] += f.v[vi].y * dt;
+          pa2[vi * 3 + 2] += f.v[vi].z * dt;
+        }
+        f.geo.attributes.position.needsUpdate = true;
+        f.o.material.opacity = Math.pow(k, 0.8);
+      }
+      else if (f.kind === 'sweep') {
+        f.o.scale.setScalar(2 + (f.o.userData.r1 || 34) * (1 - k) * 0.5);
+        f.o.material.opacity = 0.30 * Math.pow(k, 1.2);
+      }
+      else if (f.kind === 'core') {
+        f.o.position.lerp(f.c, Math.min(1, dt * 7.5));
+        f.o.material.opacity = 0.9 * Math.pow(k, 0.7);
+        f.o.scale.multiplyScalar(1 + dt * 0.9);
+      }
       else if (f.kind === 'flash') { f.o.material.opacity = k; f.o.scale.multiplyScalar(1 + dt * 6); }
       else if (f.kind === 'decal') { f.o.material.opacity = 0.9 * k; }
       else if (f.kind === 'num') { f.o.position.y += dt * 1.6; f.o.material.opacity = k; }
@@ -1879,18 +2701,26 @@ function offerCards() {
       var bo = bolts[bi];
       bo.life -= dt;
       var kk = Math.max(0, bo.life / bo.max);
-      bo.o.material.opacity = kk;
-      if (bo.h) bo.h.material.opacity = kk * 0.5;
+      var pp, qq;
+      for (pp = 0; pp < bo.parts.length; pp++) bo.parts[pp].o.material.opacity = kk * bo.parts[pp].k;
+      if (bo.ex) for (qq = 0; qq < bo.ex.length; qq++) bo.ex[qq].material.opacity = kk * 0.45;
       if (bo.life <= 0) {
-        scene.remove(bo.o); if (bo.h) scene.remove(bo.h);
-        bo.o.geometry.dispose(); bo.o.material.dispose();
-        if (bo.h) bo.h.material.dispose();
+        for (pp = 0; pp < bo.parts.length; pp++) {
+          scene.remove(bo.parts[pp].o);
+          bo.parts[pp].o.geometry.dispose();
+          bo.parts[pp].o.material.dispose();
+        }
+        if (bo.ex) for (qq = 0; qq < bo.ex.length; qq++) { scene.remove(bo.ex[qq]); bo.ex[qq].geometry.dispose(); bo.ex[qq].material.dispose(); }
         bolts.splice(bi, 1);
       }
     }
 
     /* 波次 */
     S.t += dt;
+    S.pulseT = (S.pulseT || 0) + dt;
+    if (S.ultT > 0) S.ultT = Math.max(0, S.ultT - dt);
+    if (S.comboT > 0) S.comboT = Math.max(0, S.comboT - dt);
+    if (S.pulseT > 3.4) { S.pulseT = 0; fieldPulse(); }
     if (S.t > 1.6) mentorSay('start');
     if (S.lv >= 2) mentorSay('lv');
     if (S.hp > 0 && S.hp < S.maxHp * 0.35) mentorSay('low');
@@ -1917,11 +2747,16 @@ function offerCards() {
   function loop() {
     requestAnimationFrame(loop);
     var dt = Math.min(0.05, clock.getDelta());
+    handTick(dt);
     if (!S.paused) tick(dt);
     if (BGM.on) musicTick();
     updateQuarks(dt);
     autoQuality(dt);
     fpsTick(dt);
+    /* 残影强度：连杀期间随连击数加深，宏聚变/被击时由一个衰减脉冲顶到最满 */
+    aiTarget = (S.comboT > 0) ? Math.min(0.86, 0.58 + (S.combo || 1) * 0.02) : 0;
+    if (S.trailT > 0) { S.trailT = Math.max(0, S.trailT - dt); aiTarget = Math.max(aiTarget, 0.90); }
+    aiDamp += (aiTarget - aiDamp) * Math.min(1, dt * 7);
     bloomRender();
   }
 
@@ -1956,17 +2791,63 @@ function offerCards() {
   }
 
   boot.style.display = 'none';
+  (function handBind() {
+    var e = handEl();
+    if (e.btn) e.btn.addEventListener('click', function () { handStart(); });
+    /* 点小屏放大 / 收小：想看清手有没有进画面时不至于盯着 132px */
+    if (e.camWrap) e.camWrap.addEventListener('click', function () {
+      /* 没开摄像头时点这块 = 开摄像头（占位框上写着「点这里开始」）；
+         开着的时候才是放大 / 收小 */
+      if (HAND.state === 'off' || HAND.state === 'denied') { handStart(); return; }
+      if (e.box) e.box.classList.toggle('big');
+    });
+    handUi();
+  })();
   hud();
   loop();
 
   window.__arena = {
+    ult: macroFusion,
+    freq: function (v) { if (v != null) S.freq = v % 3; return S.freq; },
+    /* 测试钩子：卡片面板开着时按序号选卡；返回 true 表示真的选上了 */
+    pickCard: pickCard,
+    cards: function () { return (S.cards || []).slice(); },
+    cardOpen: function () { return !!(cardEl && cardEl.classList.contains('on')); },
+    /* 测试钩子：手动画一道电弧（截图/观感比对用），返回画了几层 */
+    bolt: function (x1, z1, x2, z2, tint) {
+      bolt(new T.Vector3(x1 || 0, 1.0, z1 || 0), new T.Vector3(x2 == null ? 6 : x2, 1.0, z2 == null ? 0 : z2), tint);
+      return bolts.length ? bolts[bolts.length - 1].parts.length : 0;
+    },
+    /* 测试钩子：不接摄像头也能验手势——手上喂摇杆/捏合，读回状态 */
+    hand: function (o) {
+      o = o || {};
+      if ('u' in o) HAND.tu = Math.max(-1, Math.min(1, +o.u || 0));
+      if ('v' in o) HAND.tv = Math.max(-1, Math.min(1, +o.v || 0));
+      if ('pinch' in o) HAND.pinchR = Math.max(0, +o.pinch);
+      if ('present' in o) { HAND.present = !!o.present; if (o.present) HAND.lost = 0; }
+      if (o.lm) { handIngest({ landmarks: o.lm }); HAND.lmS = null; }
+      if (o.hold != null) HAND.hold = !!o.hold;   /* 测试用：压住 worker 的 empty，让合成手一直留在画面上 */
+      if (o.paint) handPaint();
+      if (o.on != null) { HAND.on = !!o.on; HAND.state = o.on ? 'live' : 'off'; handUi(); }
+      if (o.toggle) handStart();
+      if (o.recal) { HAND.cal = { cx: 0.5, cy: 0.5, n: 0, done: false }; try { localStorage.removeItem(CAL_KEY); } catch (e) {} handSay('重校准中：手举在习惯的位置别动'); }
+      if (HAND.el.box) HAND.el.box.setAttribute('data-present', HAND.present ? '1' : '0');
+      return handState();
+    },
     bgm: function () { return { on: BGM.on, mode: BGM.mode, muted: AUD.muted, state: AUD.ctx && AUD.ctx.state }; },
     music: function () { return { on: MUSIC.on, mode: MUSIC.mode, vols: Object.keys(MUSIC.list).map(function (k) { return k + ':' + MUSIC.list[k].volume.toFixed(2); }).join(' '), scale: BGM.scale, muted: AUD.muted }; },
     gainXp: gainXp,
-    quality: function () { return { dpr: +dpr.toFixed(2), max: DPR_MAX, bloom: bloomOn }; },
+    quality: function () { return { dpr: +dpr.toFixed(2), max: DPR_MAX, bloom: bloomOn, aiDamp: +aiDamp.toFixed(3) }; },
+    /* 测试钩子：直接推一把残影 / 震动，截图和手感比对用 */
+    fx: function (o) {
+      o = o || {};
+      if (o.trail != null) S.trailT = +o.trail;
+      if (o.buzz != null) buzz(o.buzz, true);
+      return { aiDamp: +aiDamp.toFixed(3), aiTarget: +aiTarget.toFixed(3), trailT: +(S.trailT || 0).toFixed(2) };
+    },
     laser: function () { if (S.boss && !S.boss.dead) fireLaser(S.boss); },
     state: function () {
-      return { hp: S.hp, lv: S.lv, kills: S.kills, wave: S.wave, x: +S.pos.x.toFixed(1), z: +S.pos.z.toFixed(1), bossNext: +(S.bossNext||0).toFixed(0), boss: !!S.boss, enemies: enemies.length, quantum: qClouds.length, collapsed: S.collapsed || 0, auraR: S.auraR || 0, t: Math.round(S.t), paused: S.paused };
+      return { hp: S.hp, lv: S.lv, kills: S.kills, wave: S.wave, x: +S.pos.x.toFixed(1), z: +S.pos.z.toFixed(1), bossNext: +(S.bossNext||0).toFixed(0), boss: !!S.boss, enemies: enemies.length, quantum: qClouds.length, collapsed: S.collapsed || 0, auraR: S.auraR || 0, t: Math.round(S.t), paused: S.paused, freq: S.freq || 0, ultT: +(S.ultT || 0).toFixed(1), cards: (S.cards || []).length, cardOn: !!(cardEl && cardEl.classList.contains('on')) };
     },
     spawn: function (n) { for (var i = 0; i < (n || 1); i++) spawn('tank'); },
     hurtAll: function () { for (var i = 0; i < enemies.length; i++) hurt(enemies[i], 999); },
