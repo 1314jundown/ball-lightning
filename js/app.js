@@ -1405,7 +1405,120 @@ g.fillText(PALETTES[k].name, 60 + (i % 2) * 400, 380 + Math.floor(i / 2) * 400);
 });
 return c.toDataURL('image/png');
 };
-function draw(){
+let CAP = null, GLHooked = null;
+function hookRoseGL(){
+const cv = document.getElementById('gl');
+if (!cv) return null;
+let gl = null;
+try { gl = cv.getContext('webgl') || cv.getContext('experimental-webgl'); } catch (e) { gl = null; }
+if (!gl) return null;
+if (GLHooked === gl) return gl;
+GLHooked = gl;
+const wrap = function (name){
+const orig = gl[name];
+if (typeof orig !== 'function') return;
+gl[name] = function (){
+const r = orig.apply(gl, arguments);
+const cap = CAP;
+if (cap && !cap.done){ cap.done = true; try { cap.read(); } catch (e) { cap.fail(); } }
+return r;
+};
+};
+wrap('drawArrays');
+wrap('drawElements');
+if (!gl.__capPatched){ gl.__capPatched = true; }
+return gl;
+}
+function grabRose(){
+return new Promise(function (resolve){
+const cv = document.getElementById('gl');
+const gl = hookRoseGL();
+if (!cv || !gl) return resolve(null);
+const w = gl.drawingBufferWidth, h = gl.drawingBufferHeight;
+if (!w || !h) return resolve(null);
+const buf = new Uint8Array(w * h * 4);
+let settled = false;
+const timer = setTimeout(function (){ finish(false); }, 900);
+function finish(ok){
+if (settled) return;
+settled = true;
+clearTimeout(timer);
+CAP = null;
+if (!ok) return resolve(null);
+const c = document.createElement('canvas');
+c.width = w; c.height = h;
+const g2 = c.getContext('2d');
+const img = g2.createImageData(w, h);
+let minX = w, minY = h, maxX = -1, maxY = -1;
+for (let yy = 0; yy < h; yy++){
+const src = (h - 1 - yy) * w * 4, dst = yy * w * 4;
+img.data.set(buf.subarray(src, src + w * 4), dst);
+}
+for (let yy = 0; yy < h; yy += 2){
+for (let xx = 0; xx < w; xx += 2){
+const o = (yy * w + xx) * 4;
+const lum = img.data[o] + img.data[o + 1] + img.data[o + 2];
+if (lum > 26){
+if (xx < minX) minX = xx;
+if (xx > maxX) maxX = xx;
+if (yy < minY) minY = yy;
+if (yy > maxY) maxY = yy;
+}
+}
+}
+g2.putImageData(img, 0, 0);
+if (maxX < 0 || maxY < 0) return resolve(null);
+const pad = Math.round(Math.max(maxX - minX, maxY - minY) * 0.04);
+resolve({
+canvas: c,
+bbox: {
+x: Math.max(0, minX - pad),
+y: Math.max(0, minY - pad),
+w: Math.min(w, maxX - minX + pad * 2),
+h: Math.min(h, maxY - minY + pad * 2)
+}
+});
+}
+CAP = {
+done: false,
+read: function (){
+gl.readPixels(0, 0, w, h, gl.RGBA, gl.UNSIGNED_BYTE, buf);
+finish(true);
+},
+fail: function (){ finish(false); }
+};
+});
+}
+function drawShot(g, shot, cx, cy, R){
+const bb = shot.bbox;
+const size = R * 2.06;
+const S = 2;
+const tmp = document.createElement('canvas');
+tmp.width = Math.round(size * S); tmp.height = Math.round(size * S);
+const tg = tmp.getContext('2d');
+const k = Math.min(tmp.width / bb.w, tmp.height / bb.h);
+const dw = bb.w * k, dh = bb.h * k;
+tg.drawImage(shot.canvas, bb.x, bb.y, bb.w, bb.h,
+(tmp.width - dw) / 2, (tmp.height - dh) / 2, dw, dh);
+tg.globalCompositeOperation = 'destination-in';
+const mask = tg.createRadialGradient(tmp.width / 2, tmp.height / 2, tmp.width * 0.26,
+tmp.width / 2, tmp.height / 2, tmp.width * 0.50);
+mask.addColorStop(0, 'rgba(0,0,0,1)');
+mask.addColorStop(0.72, 'rgba(0,0,0,.92)');
+mask.addColorStop(1, 'rgba(0,0,0,0)');
+tg.fillStyle = mask;
+tg.fillRect(0, 0, tmp.width, tmp.height);
+g.save();
+g.globalCompositeOperation = 'lighter';
+g.filter = 'blur(' + Math.round(R * 0.20) + 'px)';
+g.globalAlpha = 0.42;
+g.drawImage(tmp, cx - size / 2, cy - size / 2, size, size);
+g.filter = 'none';
+g.globalAlpha = 0.96;
+g.drawImage(tmp, cx - size / 2, cy - size / 2, size, size);
+g.restore();
+}
+function draw(shot){
 const W = 720, H = 1010, DPR = 2, M = 88;
 const c = document.createElement('canvas');
 c.width = W * DPR; c.height = H * DPR;
@@ -1440,21 +1553,21 @@ tracked(g, 'THE UNOBSERVABLE ROSE', W - M - 104, 100, 1.5, 'left');
 g.fillStyle = rgba(DIM, .30);
 g.fillRect(W - M - 148, 60, 1, 52);
 g.fillStyle = rgba(INK, .97);
-g.font = '600 92px ' + SERIF;
-tracked(g, '球状闪电', M, 246, 2, 'left');
+g.font = '600 86px ' + SERIF;
+tracked(g, '球状闪电', M, 238, 2, 'left');
 g.fillStyle = rgba(AMBER, .9);
-g.fillRect(M, 272, 58, 2);
+g.fillRect(M, 264, 58, 2);
 g.fillStyle = rgba(INK, .74);
 g.font = '300 14px ' + SANS;
-tracked(g, '粒子之间', M + 2, 316, 8.4, 'left');
+tracked(g, '粒子之间', M + 2, 306, 8.4, 'left');
 g.fillStyle = rgba(AMBER, .55);
-g.fillRect(M - 22, 372, 3, 62);
+g.fillRect(M - 22, 364, 3, 62);
 const quote = '当我走到人生的尽头，当我在弥留之际最后一次睁开眼睛，那时我所有的知性和记忆都消失在过去的深渊中，又回到童年纯真的感觉和梦幻之中，那就是量子玫瑰向我微笑的时候。';
 g.fillStyle = rgba(INK, .86);
-g.font = '300 20px ' + SERIF;
-const maxW = 508, lh = 40;
+g.font = '300 19px ' + SERIF;
+const maxW = 486, lh = 37;
 const NO_START = '，。、；：？！）」』】〉》·…—';
-let y = 400, line = '';
+let y = 390, line = '';
 const lines = [];
 for (const ch of quote){
 if (g.measureText(line + ch).width > maxW && line && NO_START.indexOf(ch) < 0){
@@ -1471,7 +1584,7 @@ g.fillRect(M, y + 46, 26, 1);
 g.fillStyle = rgba(DIM, .74);
 g.font = '10px ' + MONO;
 tracked(g, '《球状闪电》尾声 · 刘慈欣', M + 38, y + 50, 1.6, 'left');
-const RCX = 466, RCY = 700, RR = 162;
+const RCX = 452, RCY = 722, RR = 184;
 const RMs = (typeof window !== 'undefined' && window.__roseM) ? window.__roseM : {};
 const gk = Math.max(0, Math.min(1, RMs.gone || 0));
 const rPhase = RMs.phase || 'idle';
@@ -1491,14 +1604,14 @@ halo.addColorStop(0.45, 'rgba(110,140,240,.09)');
 halo.addColorStop(1, 'rgba(120,150,255,0)');
 g.fillStyle = halo;
 g.fillRect(RCX - RR * 1.9, RCY - RR * 1.9, RR * 3.8, RR * 3.8);
-roseArt(g, RCX, RCY, RR);
+if (shot) drawShot(g, shot, RCX, RCY, RR); else roseArt(g, RCX, RCY, RR);
 g.fillStyle = rgba(DIM, .55);
 g.font = '9px ' + MONO;
-tracked(g, 'OBSERVATION', M, 804, 2.2, 'left');
+tracked(g, 'OBSERVATION', M, 716, 2.2, 'left');
 g.fillStyle = rgba(INK, .52);
 g.font = '300 13px ' + SERIF;
-g.fillText('注意力转开时出现，', M, 830);
-g.fillText('被测量时消失。', M, 852);
+g.fillText('注意力转开时出现，', M, 744);
+g.fillText('被测量时消失。', M, 768);
 g.fillStyle = rgba([255, 255, 255], .10);
 g.fillRect(M, H - 92, W - M * 2, 1);
 g.fillStyle = rgba(DIM, .62);
@@ -1557,8 +1670,10 @@ return b.toDataURL('image/png');
 }
 window.__markBack = drawBack;
 let backUrl = null;
-btn.addEventListener('click', () => {
-const url = draw();
+btn.addEventListener('click', async () => {
+let shot = null;
+try { shot = await grabRose(); } catch (e) { shot = null; }
+const url = draw(shot);
 backUrl = drawBack();
 document.getElementById('markImg').src = url;
 document.getElementById('markSave').href = url;
