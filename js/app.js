@@ -8207,8 +8207,8 @@ const center = stage && stage.querySelector('.stage-center');
 const concepts = document.getElementById('concepts');
 if (!stage || !center || !concepts) return;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
-const MAX = 24000;
-let N = REDUCED ? 6000 : (innerWidth <= 1000 ? 12000 : 22000);
+const MAX = 64000;
+let N = REDUCED ? 8000 : (innerWidth <= 1000 ? 16000 : 38000);
 const cv = document.createElement('canvas');
 cv.className = 'stage-pfx';
 cv.setAttribute('aria-hidden', 'true');
@@ -8755,7 +8755,7 @@ const c = center.getBoundingClientRect();
 const z = typeof zScale === 'number' ? zScale : 1;
 cx = (c.left - r.left + c.width / 2) * dpr; cy = (c.top - r.top + c.height / 2) * dpr;
 u = c.width / 600 * z * dpr;
-PSC = Math.max(1.02, u * 1.18);
+PSC = 1.0;
 }
 stage.addEventListener('pointermove', e => {
 const r = stage.getBoundingClientRect();
@@ -8934,7 +8934,7 @@ gl.useProgram(bProg);
 gl.activeTexture(gl.TEXTURE0);
 gl.bindTexture(gl.TEXTURE_2D, fbTex);
 gl.uniform1i(gl.getUniformLocation(bProg, 'uT'), 0);
-gl.uniform2f(gl.getUniformLocation(bProg, 'uP'), 2.4 / W, 2.4 / H);
+gl.uniform2f(gl.getUniformLocation(bProg, 'uP'), 1.2 / W, 1.2 / H);
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
 gl.enableVertexAttribArray(0);
 gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -8953,7 +8953,7 @@ gl.bindTexture(gl.TEXTURE_2D, fbQTex);
 gl.uniform1i(gl.getUniformLocation(tProg, 'uB'), 1);
 gl.activeTexture(gl.TEXTURE0);
 }
-gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 1.55 : 0.0);
+gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 0.5 : 0.0);
 gl.uniform2f(gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
 gl.uniform2f(tProg && gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
