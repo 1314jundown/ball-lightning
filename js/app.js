@@ -8208,7 +8208,7 @@ const concepts = document.getElementById('concepts');
 if (!stage || !center || !concepts) return;
 const REDUCED = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const MAX = 64000;
-let N = REDUCED ? 8000 : (innerWidth <= 1000 ? 16000 : 38000);
+let N = REDUCED ? 8000 : (innerWidth <= 1000 ? 20000 : 58000);
 const cv = document.createElement('canvas');
 cv.className = 'stage-pfx';
 cv.setAttribute('aria-hidden', 'true');
@@ -8656,7 +8656,7 @@ const vs = 'attribute vec2 aP;attribute float aS;attribute vec4 aC;uniform vec2 
 'void main(){vec2 p=aP/uR*2.0-1.0;gl_Position=vec4(p.x,-p.y,0.0,1.0);gl_PointSize=aS;vC=vec4(clamp(hue(aC.rgb,uH),0.0,1.0),aC.a);}';
 const fs = 'precision mediump float;varying vec4 vC;uniform float uG;' +
 'void main(){vec2 q=gl_PointCoord-0.5;float d=length(q)*2.0;if(d>1.0)discard;' +
-'float a=smoothstep(1.0,0.92,d)*(1.0+0.25*uG)*vC.a*0.42;gl_FragColor=vec4(vC.rgb*a,a);}';
+'float a=smoothstep(1.0,0.92,d)*(1.0+0.25*uG)*vC.a*0.34;gl_FragColor=vec4(vC.rgb*a,a);}';
 const sh = (type, src) => { const o = gl.createShader(type); gl.shaderSource(o, src); gl.compileShader(o); return o; };
 prog = gl.createProgram();
 gl.attachShader(prog, sh(gl.VERTEX_SHADER, vs)); gl.attachShader(prog, sh(gl.FRAGMENT_SHADER, fs));
