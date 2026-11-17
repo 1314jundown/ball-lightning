@@ -1217,6 +1217,107 @@ g.fillStyle = g.createPattern(grainTile, 'repeat');
 g.fillRect(0, 0, W, H);
 g.restore();
 }
+const ROSE_VIEW = { tilt: 1.30, spin: 0.62 };
+function roseArt(g, cx, cy, R, opt){
+const cloud = roseCloud();
+const o = opt || {};
+const spin = o.spin === undefined ? ROSE_VIEW.spin : o.spin;
+const tilt = o.tilt === undefined ? ROSE_VIEW.tilt : o.tilt;
+const RM = (typeof window !== 'undefined' && window.__roseM) ? window.__roseM : {};
+const gk = Math.max(0, Math.min(1, RM.gone || 0));
+const cs = Math.cos(spin), sn = Math.sin(spin);
+const ct = Math.cos(tilt), st = Math.sin(tilt);
+const K = R * 1.06;
+function dot(px, py, rr, col){
+g.beginPath();
+g.arc(px, py, rr, 0, Math.PI * 2);
+g.fillStyle = col;
+g.fill();
+}
+function proj(i){
+const x0 = cloud.xs[i], y0 = cloud.ys[i], z0 = cloud.zs[i];
+const x1 = x0 * cs + z0 * sn;
+const z1 = -x0 * sn + z0 * cs;
+const y2 = y0 * ct - z1 * st;
+const d2 = y0 * st + z1 * ct;
+const persp = 1 / (1.58 - d2 * 0.44);
+const sc = 1 + gk * 1.5;
+return {
+x: cx + x1 * K * persp * sc + (Math.random() - 0.5) * gk * R * 0.8,
+y: cy + y2 * K * persp * 0.99 * sc + (Math.random() - 0.5) * gk * R * 0.8,
+depth: (d2 + 1) / 2,
+rad: Math.hypot(x1, y2)
+};
+}
+g.save();
+g.globalCompositeOperation = 'lighter';
+g.shadowBlur = R * 0.12;
+g.shadowColor = 'rgba(120,152,255,.55)';
+for (let i = 0; i < cloud.n; i += 2){
+const q = proj(i);
+const warm = Math.max(0, 1 - q.rad / 0.52) * (0.30 + 0.70 * q.depth);
+dot(q.x, q.y, (1.5 + 1.9 * q.depth) * (1 + gk * 0.6),
+'hsla(' + Math.round(206 + 26 * (1 - q.depth) + 88 * warm) + ',88%,' +
+Math.round(46 + 18 * q.depth) + '%,' +
+((0.05 + 0.15 * q.depth) * (1 - gk * 0.7)).toFixed(3) + ')');
+}
+g.shadowBlur = 0;
+for (let i = 0; i < cloud.n; i++){
+const q = proj(i);
+const warm = Math.max(0, 1 - q.rad / 0.48) * (0.30 + 0.70 * q.depth);
+const edge = Math.max(0, Math.min(1, (q.rad - 0.55) / 0.35));
+const hue = 212 + 30 * (1 - q.depth) + 18 * edge + 92 * warm;
+const rim = 1 - 0.5 * edge;
+const alpha = (0.10 + 0.34 * q.depth) * (1 - gk * 0.72) * (0.85 + 0.45 * warm) * rim;
+dot(q.x, q.y, (0.55 + 1.05 * q.depth) * (1 + gk * 0.5),
+'hsla(' + Math.round(hue) + ',' + Math.round(86 + 8 * warm) + '%,' +
+Math.round(56 + 20 * q.depth + 8 * warm) + '%,' + alpha.toFixed(3) + ')');
+}
+g.restore();
+const gapFill = g.createRadialGradient(cx, cy, R * 0.10, cx, cy, R * 0.98);
+gapFill.addColorStop(0, 'rgba(150,120,255,' + (0.10 * (1 - gk * 0.6)).toFixed(3) + ')');
+gapFill.addColorStop(0.55, 'rgba(96,110,225,' + (0.07 * (1 - gk * 0.6)).toFixed(3) + ')');
+gapFill.addColorStop(1, 'rgba(60,80,180,0)');
+g.save();
+g.globalCompositeOperation = 'lighter';
+g.fillStyle = gapFill;
+g.fillRect(cx - R, cy - R, R * 2, R * 2);
+g.restore();
+const core = g.createRadialGradient(cx, cy, 0, cx, cy, R * 0.42);
+core.addColorStop(0, 'rgba(255,196,232,' + (0.16 * (1 - gk * 0.6)).toFixed(3) + ')');
+core.addColorStop(0.55, 'rgba(214,150,255,' + (0.07 * (1 - gk * 0.6)).toFixed(3) + ')');
+core.addColorStop(1, 'rgba(140,140,255,0)');
+g.fillStyle = core;
+g.fillRect(cx - R, cy - R, R * 2, R * 2);
+g.save();
+g.globalCompositeOperation = 'lighter';
+g.shadowBlur = R * 0.05;
+g.shadowColor = 'rgba(255,170,235,.7)';
+for (let i = 0; i < 300; i++){
+const t = i / 300;
+const ang = spin * 2.2 + t * Math.PI * 7.4;
+const r = R * (0.02 + 0.30 * t * (1 - 0.35 * t));
+dot(cx + Math.cos(ang) * r, cy + Math.sin(ang) * r * 0.96, 0.5 + Math.random() * 1.1,
+'hsla(' + (300 + Math.round(Math.random() * 40)) + ',92%,' + (68 + Math.round(Math.random() * 14)) +
+'%,' + ((0.06 + 0.14 * (1 - t)) * (1 - gk * 0.7)).toFixed(3) + ')');
+if (i === 299) g.shadowBlur = 0;
+}
+g.restore();
+}
+window.__markGrid = function (){
+const c = document.createElement('canvas');
+c.width = 820; c.height = 820;
+const g = c.getContext('2d');
+g.fillStyle = '#080a12'; g.fillRect(0, 0, 820, 820);
+const cases = [[1.05, 0.55], [1.25, 0.55], [1.42, 0.55], [1.57, 1.90]];
+cases.forEach(function (o, i){
+roseArt(g, 215 + (i % 2) * 400, 215 + Math.floor(i / 2) * 400, 150, { tilt: o[0], spin: o[1] });
+g.fillStyle = 'rgba(200,214,238,.75)';
+g.font = '12px ui-monospace,monospace';
+g.fillText('tilt ' + o[0].toFixed(2) + ' / spin ' + o[1].toFixed(2), 60 + (i % 2) * 400, 380 + Math.floor(i / 2) * 400);
+});
+return c.toDataURL('image/png');
+};
 function draw(){
 const W = 720, H = 1010, DPR = 2, M = 88;
 const c = document.createElement('canvas');
@@ -1283,66 +1384,27 @@ g.fillRect(M, y + 46, 26, 1);
 g.fillStyle = rgba(DIM, .74);
 g.font = '10px ' + MONO;
 tracked(g, '《球状闪电》尾声 · 刘慈欣', M + 38, y + 50, 1.6, 'left');
-const RCX = 456, RCY = 754, RR = 134;
-const ground = g.createRadialGradient(RCX, RCY + 96, 0, RCX, RCY + 96, RR * 1.5);
+const RCX = 466, RCY = 700, RR = 162;
+const RMs = (typeof window !== 'undefined' && window.__roseM) ? window.__roseM : {};
+const gk = Math.max(0, Math.min(1, RMs.gone || 0));
+const rPhase = RMs.phase || 'idle';
+const ground = g.createRadialGradient(RCX, RCY + 104, 0, RCX, RCY + 104, RR * 1.5);
 ground.addColorStop(0, 'rgba(120,150,255,.16)');
 ground.addColorStop(1, 'rgba(120,150,255,0)');
 g.save();
-g.translate(RCX, RCY + 96);
-g.scale(1, 0.34);
-g.translate(-RCX, -(RCY + 96));
+g.translate(RCX, RCY + 104);
+g.scale(1, 0.32);
+g.translate(-RCX, -(RCY + 104));
 g.fillStyle = ground;
-g.fillRect(RCX - RR * 1.6, RCY + 96 - RR * 1.6, RR * 3.2, RR * 3.2);
+g.fillRect(RCX - RR * 1.6, RCY + 104 - RR * 1.6, RR * 3.2, RR * 3.2);
 g.restore();
-const halo = g.createRadialGradient(RCX, RCY, 0, RCX, RCY, RR * 1.8);
-halo.addColorStop(0, 'rgba(120,150,255,.20)');
-halo.addColorStop(0.5, 'rgba(100,130,240,.07)');
+const halo = g.createRadialGradient(RCX, RCY, 0, RCX, RCY, RR * 1.75);
+halo.addColorStop(0, 'rgba(150,165,255,.22)');
+halo.addColorStop(0.45, 'rgba(110,140,240,.09)');
 halo.addColorStop(1, 'rgba(120,150,255,0)');
 g.fillStyle = halo;
 g.fillRect(RCX - RR * 1.9, RCY - RR * 1.9, RR * 3.8, RR * 3.8);
-function dotAt(x, yy, radius, color){
-g.beginPath();
-g.arc(x, yy, radius, 0, Math.PI * 2);
-g.fillStyle = color;
-g.fill();
-}
-const cloud = roseCloud();
-const spin = Math.random() * Math.PI * 2;
-const tilt = (70 + Math.random() * 14) * Math.PI / 180;
-const cs2 = Math.cos(spin), sn2 = Math.sin(spin);
-const ct = Math.cos(tilt), st = Math.sin(tilt);
-const K = RR * 1.02;
-const RM = (typeof window !== 'undefined' && window.__roseM) ? window.__roseM : {};
-const gk = Math.max(0, Math.min(1, RM.gone || 0));
-const mm = Math.max(0, Math.min(1, RM.morph || 0));
-const rPhase = RM.phase || 'idle';
-g.save();
-g.globalCompositeOperation = 'lighter';
-for (let i = 0; i < cloud.n; i++){
-const x0 = cloud.xs[i], y0 = cloud.ys[i], z0 = cloud.zs[i];
-const x1 = x0 * cs2 + z0 * sn2;
-const z1 = -x0 * sn2 + z0 * cs2;
-const y2 = y0 * ct - z1 * st;
-const d2 = y0 * st + z1 * ct;
-const persp = 1 / (1.9 - d2 * 0.55);
-const scatter = 1 + gk * 1.45 + mm * 0.18;
-const px = RCX + x1 * K * persp * scatter + (Math.random() - 0.5) * gk * RR * 0.75;
-const py = RCY + y2 * K * persp * scatter + (Math.random() - 0.5) * gk * RR * 0.75;
-const depth = (d2 + 1) / 2;
-const fade = (1 - gk * 0.78) * (0.92 + 0.22 * (1 - mm));
-dotAt(px, py, (0.7 + Math.random() * 1.15) * (1 + gk * 0.55),
-'hsla(' + (206 + Math.round(28 * (1 - depth)) + Math.round(gk * 10)) + ',92%,' +
-Math.round(54 + 26 * depth) + '%,' + ((0.09 + 0.42 * depth) * fade).toFixed(3) + ')');
-}
-for (let i = 0; i < 150; i++){
-const t = i / 150;
-const ang = spin + t * Math.PI * 6.2;
-const r = RR * (0.012 + 0.15 * t);
-dotAt(RCX + Math.cos(ang) * r, RCY + Math.sin(ang) * r * 0.96, 0.55 + Math.random() * 1.0,
-'hsla(' + (231 + Math.round(Math.random() * 14)) + ',92%,' + (70 + Math.round(Math.random() * 12)) +
-'%,' + (0.20 + 0.34 * (1 - t)).toFixed(3) + ')');
-}
-g.restore();
+roseArt(g, RCX, RCY, RR);
 g.fillStyle = rgba(DIM, .55);
 g.font = '9px ' + MONO;
 tracked(g, 'OBSERVATION', M, 804, 2.2, 'left');
