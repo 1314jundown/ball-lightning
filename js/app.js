@@ -3300,7 +3300,7 @@ return base(k, v);
 let dragging = false, px = 0, py = 0;
 gEl.style.cursor = 'grab';
 gEl.addEventListener('pointerdown', function(e){
-dragging = true; px = e.clientX; py = e.clientY;
+dragging = true; window.__pin = true; px = e.clientX; py = e.clientY;
 gEl.style.cursor = 'grabbing';
 try { gEl.setPointerCapture(e.pointerId); } catch (err) {}
 e.preventDefault(); e.stopPropagation();
@@ -3394,7 +3394,7 @@ motion = 0;
 if (document.hidden || !peopleOn()) return;
 const dt = Math.min(0.05, lastT ? (now - lastT) / 1000 : 0.016);
 lastT = now;
-yaw += dt * 0.12;
+if (!window.__pin) yaw += dt * 0.12;
 yawOff += (yawOffT - yawOff) * Math.min(1, dt * 3.4);
 pitch += (pitchT - pitch) * Math.min(1, dt * 3.4);
 layout();
