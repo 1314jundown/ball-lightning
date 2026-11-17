@@ -1984,7 +1984,6 @@ applyTune();
 window.__tuneReady = true;
 });
 applyTune();
-if (innerWidth > 1000) $('#concepts').classList.add('drawer-open');
 setNode('ball');
 if (window.__stage3D && typeof window.__stage3D.human === 'function') window.__stage3D.human(false);
 let statusQuiet = false;
