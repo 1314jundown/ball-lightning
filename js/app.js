@@ -1878,6 +1878,13 @@ const d = nodes[k];
 $$('#cgList [data-node]').forEach(n => n.setAttribute('aria-current', String(n.dataset.node === k)));
 $('#nTitle').textContent = d.n;
 $('#nSub').textContent = d.sub;
+const sciEl = $('#nSci'), ficEl = $('#nFic'), qEl = $('#nQ');
+if (sciEl) sciEl.textContent = d.sci || '';
+if (ficEl) ficEl.textContent = d.fic || '';
+if (qEl){
+if (d.q){ qEl.textContent = d.q; qEl.hidden = false; }
+else { qEl.textContent = ''; qEl.hidden = true; }
+}
 $('#nRel').textContent = d.rel;
 $('#nBnd').textContent = d.bnd;
 const rc = (window.LAB && window.LAB.reality && window.LAB.reality.concepts || {})[k];

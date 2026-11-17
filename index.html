@@ -5127,6 +5127,87 @@ transform:translate(-50%,-50%) scale(1.9);
 filter:saturate(1.05) contrast(1.2) brightness(1.5);
 }
 }
+#concepts .drawer-body{padding:24px 20px 40px}
+#concepts .cg-list{display:grid;grid-template-columns:1fr;margin:14px 0 0;gap:2px}
+#concepts .cg-list li{display:block}
+#concepts .cg-list button{
+display:flex;align-items:baseline;gap:10px;
+padding:9px 10px 9px 9px;border:0;border-radius:7px;
+background:transparent;border-left:2px solid transparent;
+transition:background .18s ease,border-color .18s ease;
+}
+#concepts .cg-list button:hover{background:rgba(255,255,255,.05);border-left-color:rgba(168,196,226,.45)}
+#concepts .cg-list button[aria-current="true"]{
+background:linear-gradient(90deg,rgba(120,150,220,.16),rgba(120,150,220,0));
+border-left-color:var(--amber);
+}
+#concepts .cg-list button .b{
+display:block;margin-left:auto;font-size:8px;letter-spacing:.06em;
+color:rgba(150,172,196,.6);white-space:nowrap;
+}
+#concepts .cg-list button[aria-current="true"] .b{color:rgba(240,214,150,.82)}
+#concepts .cg-def{margin-top:18px;padding-top:16px;border-top:1px solid rgba(168,193,219,.16)}
+#concepts .cg-def h3{font-size:21px;letter-spacing:.02em}
+#concepts .cg-def h3::after{
+content:"";display:block;width:26px;height:2px;margin:9px 0 0;
+background:var(--amber);opacity:.75;
+}
+#concepts .cg-sub{
+margin:9px 0 0;font-family:var(--mono);font-size:9px;
+letter-spacing:.16em;color:rgba(178,205,230,.6);
+}
+#concepts .cg-lab{
+margin:14px 0 0;padding:0;border:0;background:none;
+font-size:10.5px;line-height:1.75;color:rgba(150,170,192,.66);
+}
+#concepts .cg-def .kv{margin-top:14px}
+#concepts .cg-def .kv b{
+font-size:8px;letter-spacing:.22em;font-weight:400;
+color:rgba(160,184,208,.5);margin-bottom:3px;
+}
+#concepts .cg-def .kv span{font-size:12px;line-height:1.65;color:rgba(226,236,248,.86)}
+#concepts .cg-def .cg-more{
+display:inline-block;width:auto;margin:16px 0 0;padding:0;
+border:0;background:none;border-radius:0;text-align:left;
+font-family:var(--mono);font-size:9px;letter-spacing:.14em;
+color:rgba(196,214,236,.7);
+}
+#concepts .cg-def .cg-more:hover{color:#fff;background:none;border-color:transparent}
+#concepts .cg-chain{
+margin-top:14px;padding:11px 0 0 12px;border:0;border-left:2px solid rgba(168,196,226,.26);
+border-radius:0;background:none;
+}
+#concepts .cg-chain b{font-size:8px;letter-spacing:.22em;font-weight:400;color:rgba(170,196,222,.55)}
+#concepts .cg-chain .flow{margin:7px 0 5px;gap:5px}
+#concepts .cg-chain .flow b{
+font-size:11px;letter-spacing:0;padding:2px 7px;border-radius:5px;
+background:rgba(120,150,220,.14);color:rgba(232,240,252,.92);
+}
+#concepts .cg-chain .flow i{font-size:9px;opacity:.55}
+#concepts .cg-chain .note{font-size:9.5px;line-height:1.7;color:rgba(146,166,188,.62)}
+#concepts .cg-refs{margin-top:16px;padding-top:12px;border-top:1px solid rgba(168,193,219,.14)}
+#concepts .cg-refs b{font-size:8px;letter-spacing:.22em;font-weight:400;color:rgba(170,196,222,.5)}
+#concepts .cg-refs .src{font-size:10.5px;line-height:1.7;color:rgba(200,216,232,.8)}
+#concepts .cg-refs .refs-open-btn{
+margin-top:10px;padding:0;border:0;background:none;border-radius:0;
+font-family:var(--mono);font-size:9px;letter-spacing:.12em;color:rgba(196,214,236,.68);
+}
+#concepts .cg-refs .refs-open-btn:hover{color:#fff;border-color:transparent}
+#concepts .cg-lab{display:none}
+#concepts.drawer-open .refs-tab{display:none}
+#concepts .cg-line{display:grid;grid-template-columns:34px 1fr;gap:9px;margin:12px 0 0;align-items:baseline}
+#concepts .cg-line b{
+font-family:var(--mono);font-size:8px;letter-spacing:.2em;font-weight:400;
+padding-top:1px;
+}
+#concepts .cg-line.sci b{color:#8fd0de}
+#concepts .cg-line.fic b{color:#ffab72}
+#concepts .cg-line span{font-size:11.5px;line-height:1.75;color:rgba(206,220,236,.82)}
+#concepts .cg-q{
+margin:14px 0 0;padding:0 0 0 11px;border:0;border-left:2px solid rgba(168,196,226,.22);
+font-size:10.5px;line-height:1.8;color:rgba(170,190,212,.7);
+}
+#concepts .cg-q[hidden]{display:none}
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
@@ -5454,6 +5535,9 @@ filter:saturate(1.05) contrast(1.2) brightness(1.5);
         <h3 id="nTitle"></h3>
         <p class="cg-sub" id="nSub"></p>
 
+        <div class="cg-line sci"><b>现实</b><span id="nSci"></span></div>
+        <div class="cg-line fic"><b>小说</b><span id="nFic"></span></div>
+        <blockquote class="cg-q" id="nQ" hidden></blockquote>
         <p class="cg-lab">本屏是试验场：放动画、关系链与参数。现实中是什么、出处在哪，都写在下方面板里。</p>
         <div class="kv"><b>关系</b><span id="nRel"></span></div>
         <div class="kv"><b>边界</b><span id="nBnd"></span></div>
@@ -5651,7 +5735,7 @@ filter:saturate(1.05) contrast(1.2) brightness(1.5);
 <script defer src="js/scene3d.js?v=fe01bd43"></script>
 <script defer src="js/reality-shots.js?v=6793a80a"></script>
 <script defer src="js/lab-data.js?v=729600bc"></script>
-<script defer src="js/app.js?v=53ca3104"></script>
+<script defer src="js/app.js?v=735ad9cc"></script>
 <div aria-hidden="true" style="position:fixed;left:-9999px;top:0;width:1px;height:1px;overflow:hidden;opacity:0;pointer-events:none">
   <div id="err"></div><span id="bl"></span><span id="pts"></span><span id="fps"></span><span id="mo"></span><div id="hint"></div>
 </div>
