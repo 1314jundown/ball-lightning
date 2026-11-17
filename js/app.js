@@ -3241,10 +3241,10 @@ const z1 = -px * sy1 + pz * cy1;
 const cp = Math.cos(pitch), sp = Math.sin(pitch);
 const y1 = py * cp - z1 * sp;
 const z2 = py * sp + z1 * cp;
-const k = F_FOCAL / Math.max(220, F_FOCAL - z2);
+let k = F_FOCAL / Math.max(220, F_FOCAL - z2); k = Math.max(0.90, Math.min(1.10, k));
 return { x: view.W / 2 + x1 * k, y: view.H / 2 + y1 * k, k: k, z: z2 };
 }
-function depthK(z){ return Math.max(0.42, Math.min(1, 0.56 + (z + 100) * 0.0018)); }
+function depthK(z){ return Math.max(0.74, Math.min(1.02, 0.86 + (z + 100) * 0.0011)); }
 function buildGraph(){
 stopMotion();
 const narrow = innerWidth <= 1000;
