@@ -2929,69 +2929,200 @@ listEl.innerHTML = ARCH.map(p =>
 const NS = 'http://www.w3.org/2000/svg';
 let G = { nodes: {}, edges: [] };
 function el(tag, attrs, parent){ const e = document.createElementNS(NS, tag); for (const k in attrs) e.setAttribute(k, attrs[k]); if (parent) parent.appendChild(e); return e; }
+const FACTIONS = [
+{ name: '家人', ids: ['parents', 'dai'], z: 64, span: 66 },
+{ name: '学界', ids: ['zhang', 'gao', 'ding'], z: 2, span: 104 },
+{ name: '军方', ids: ['lin', 'jiang', 'zhao'], z: -52, span: 104 },
+{ name: '局外', ids: ['parker'], z: -96, span: 40 }
+];
+const F_GAP = 11.5, F_FOCAL = 940;
+const view = { W: 860, H: 620, R: 292, narrow: false };
+let gDeco = null, gEdges = null, gLabels = null, gNodes = null;
+let nodes3 = [], edges3 = [], rings = [];
+let yaw = -0.30, yawOff = 0, yawOffT = 0, pitch = 0.17, pitchT = 0.17;
+let motion = 0, lastT = 0, reduce = false;
+try { reduce = matchMedia('(prefers-reduced-motion: reduce)').matches; } catch (e) {}
+function project(px, py, pz){
+const cy1 = Math.cos(yaw + yawOff), sy1 = Math.sin(yaw + yawOff);
+const x1 = px * cy1 + pz * sy1;
+const z1 = -px * sy1 + pz * cy1;
+const cp = Math.cos(pitch), sp = Math.sin(pitch);
+const y1 = py * cp - z1 * sp;
+const z2 = py * sp + z1 * cp;
+const k = F_FOCAL / Math.max(220, F_FOCAL - z2);
+return { x: view.W / 2 + x1 * k, y: view.H / 2 + y1 * k, k: k, z: z2 };
+}
+function depthK(z){ return Math.max(0.42, Math.min(1, 0.56 + (z + 100) * 0.0018)); }
 function buildGraph(){
+stopMotion();
 const narrow = innerWidth <= 1000;
-const W = narrow ? 600 : 800, H = narrow ? 640 : 600;
-const cx = W / 2, cy = H / 2, rx = narrow ? 222 : 292, ry = narrow ? 236 : 214;
-const R = narrow ? 46 : 38, RM = narrow ? 60 : 52, F = narrow ? 22 : 15;
+const W = narrow ? 620 : 860, H = narrow ? 660 : 620;
+view.W = W; view.H = H; view.R = narrow ? 236 : 292; view.narrow = narrow;
 svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
 svg.innerHTML = '';
 G = { nodes: {}, edges: [] };
-el('ellipse', { cx, cy, rx, ry, class: 'orbit' }, svg);
-el('ellipse', { cx, cy, rx: rx * .55, ry: ry * .55, class: 'orbit o2' }, svg);
-const pos = { main: { x: cx, y: cy, r: RM } };
-TERM_RING.forEach((id, i) => {
-const t = (-90 + i * 40) * Math.PI / 180;
-pos[id] = { x: cx + Math.cos(t) * rx, y: cy + Math.sin(t) * ry, r: R };
+nodes3 = []; edges3 = []; rings = [];
+gDeco = el('g', {}, svg);
+gEdges = el('g', {}, svg);
+gLabels = el('g', {}, svg);
+gNodes = el('g', {}, svg);
+const R = view.R, F = narrow ? 16 : 11;
+rings.push(el('path', { fill: 'none', class: 'orbit' }, gDeco));
+nodes3.push({ id: 'main', x: 0, y: 0, z: 26, r: narrow ? 50 : 42, F: F * 1.05 });
+let a = -90;
+FACTIONS.forEach(function(f){
+f._a0 = f.ids.length === 1 ? a + f.span * 0.25 : a;
+f._a1 = f.ids.length === 1 ? a + f.span * 0.75 : a + f.span;
+const step = (f._a1 - f._a0) / Math.max(1, f.ids.length);
+f.ids.forEach(function(id, i){
+const t = (f._a0 + step * (i + 0.5)) * Math.PI / 180;
+nodes3.push({ id: id, x: Math.cos(t) * R * 1.08, y: Math.sin(t) * R * 0.90, z: f.z, r: narrow ? 40 : 34, F: F });
 });
-const eg = el('g', {}, svg), lg = el('g', {}, svg), ng = el('g', {}, svg);
-TERM_EDGES.forEach((e, ei) => {
-const a = pos[e[0]], b = pos[e[1]]; if (!a || !b) return;
-const dx = b.x - a.x, dy = b.y - a.y, L = Math.hypot(dx, dy) || 1, ux = dx / L, uy = dy / L;
-const line = el('line', { x1: (a.x + ux * (a.r + 6)).toFixed(1), y1: (a.y + uy * (a.r + 6)).toFixed(1),
-x2: (b.x - ux * (b.r + 6)).toFixed(1), y2: (b.y - uy * (b.r + 6)).toFixed(1), class: 'tedge' }, eg);
-const spoke = a === pos.main;
-const t = spoke ? 0.52 + (ei % 3) * 0.10 : 0.5;
-const lx = a.x + dx * t;
-const ly = a.y + dy * t - F * 0.35;
-const label = el('text', { x: lx.toFixed(1), y: ly.toFixed(1), class: 'tlabel', 'font-size': narrow ? 15 : 10 }, lg);
-label.textContent = e[2];
-G.edges.push({ a: e[0], b: e[1], line, label });
+a += f.span + F_GAP;
+f._arc = el('path', { fill: 'none', class: 'farc' }, gDeco);
+f._name = el('text', { class: 'fname', 'font-size': narrow ? 13 : 11 }, gDeco);
+f._name.textContent = f.name;
 });
-ARCH.forEach(p => {
-const o = pos[p.id]; if (!o) return;
-const g = el('g', { class: 'tnode', 'data-pid': p.id, tabindex: '0', role: 'button',
-'aria-label': p.name + ' · ' + p.role + '，按回车调出档案' }, ng);
-el('circle', { cx: o.x, cy: o.y, r: o.r + 8, class: 'ring' }, g);
-el('circle', { cx: o.x, cy: o.y, r: o.r, class: 'halo' }, g);
-el('circle', { cx: o.x, cy: o.y, r: o.r * .7, class: 'core' }, g);
-const no = el('text', { x: o.x, y: o.y - o.r * .2, class: 'no', 'font-size': F * .62 }, g); no.textContent = p.no;
-const nm = el('text', { x: o.x, y: o.y + F * .55, 'font-size': p.id === 'main' ? F * 1.15 : F }, g); nm.textContent = p.name;
-const rl = el('text', { x: o.x, y: o.y + o.r + F + 2, class: 'rl', 'font-size': F * .7 }, g); rl.textContent = p.tag.split(' · ')[0];
-G.nodes[p.id] = g;
+nodes3.forEach(function(n){
+const p = byId(n.id); if (!p) return;
+const g = el('g', { class: 'tnode', 'data-pid': n.id, tabindex: '0', role: 'button',
+'aria-label': p.name + ' · ' + p.role + '，按回车调出档案' }, gNodes);
+el('circle', { cx: 0, cy: 0, r: n.r + 8, class: 'ring' }, g);
+el('circle', { cx: 0, cy: 0, r: n.r, class: 'halo' }, g);
+el('circle', { cx: 0, cy: 0, r: n.r * 0.7, class: 'core' }, g);
+const no = el('text', { x: 0, y: -n.r * 0.08, class: 'no', 'font-size': n.F * 0.62 }, g); no.textContent = p.no;
+const nm = el('text', { x: 0, y: n.r * 0.52, 'font-size': n.id === 'main' ? n.F * 1.25 : n.F }, g); nm.textContent = p.name;
+const rl = el('text', { x: 0, y: n.r + n.F + 4, class: 'rl', 'font-size': n.F * 0.72 }, g); rl.textContent = p.tag.split(' · ')[0];
+n.el = g;
+G.nodes[n.id] = g;
 });
+TERM_EDGES.forEach(function(e, ei){
+let a3 = null, b3 = null;
+for (let k = 0; k < nodes3.length; k++){ if (nodes3[k].id === e[0]) a3 = nodes3[k]; if (nodes3[k].id === e[1]) b3 = nodes3[k]; }
+if (!a3 || !b3) return;
+const hit = e[0] === 'main' || e[1] === 'main';
+const path = el('path', { class: 'tedge', fill: 'none' }, gEdges);
+const lb = el('text', { class: 'tlabel', 'font-size': narrow ? 15 : 10 }, gLabels);
+lb.textContent = e[2];
+edges3.push({ a: a3, b: b3, path: path, label: lb,
+bow: hit ? 1.16 + (ei % 3) * 0.05 : 1.08,
+side: hit ? ((ei % 2) ? 1 : -1) : 1 });
+G.edges.push({ a: e[0], b: e[1], line: path, label: lb });
+});
+layout();
 paint();
+if (peopleOn()) startMotion();
 }
+function layout(){
+const R = view.R;
+for (let o = 0; o < rings.length; o++){
+let d = '';
+for (let i = 0; i <= 48; i++){
+const t = i / 48 * 6.2832;
+const q = project(Math.cos(t) * R * 1.08, Math.sin(t) * R * 0.90, 0);
+d += (i ? ' L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1);
+}
+rings[o].setAttribute('d', d + ' Z');
+}
+FACTIONS.forEach(function(f){
+let d = '';
+for (let i = 0; i <= 12; i++){
+const t = (f._a0 + (f._a1 - f._a0) * i / 12) * Math.PI / 180;
+const q = project(Math.cos(t) * R * 1.17, Math.sin(t) * R * 0.99, f.z);
+d += (i ? ' L' : 'M') + q.x.toFixed(1) + ' ' + q.y.toFixed(1);
+}
+f._arc.setAttribute('d', d);
+f._arc.setAttribute('opacity', (0.14 + depthK(f.z) * 0.30).toFixed(2));
+const mt = (f._a1 + F_GAP / 2) * Math.PI / 180;
+const q = project(Math.cos(mt) * R * 1.34, Math.sin(mt) * R * 1.16, f.z);
+const nx = Math.max(30, Math.min(view.W - 30, q.x));
+const ny = Math.max(24, Math.min(view.H - 20, q.y));
+f._name.setAttribute('x', nx.toFixed(1));
+f._name.setAttribute('y', ny.toFixed(1));
+f._name.setAttribute('opacity', (0.20 + depthK(f.z) * 0.40).toFixed(2));
+});
+nodes3.forEach(function(n){
+if (!n.el) return;
+const q = project(n.x, n.y, n.z);
+const dim = n.el.classList.contains('dim');
+n.el.setAttribute('transform', 'translate(' + q.x.toFixed(1) + ',' + q.y.toFixed(1) + ') scale(' + q.k.toFixed(3) + ')');
+n.el.style.opacity = (depthK(n.z) * (dim ? 0.34 : 1)).toFixed(2);
+});
+edges3.forEach(function(e){
+const A = project(e.a.x, e.a.y, e.a.z);
+const B = project(e.b.x, e.b.y, e.b.z);
+const dx = e.b.x - e.a.x, dy = e.b.y - e.a.y, L3 = Math.hypot(dx, dy) || 1;
+const amp = (e.bow - 1) * L3;
+const off = e.side * amp;
+const C = project((e.a.x + e.b.x) / 2 - dy / L3 * off, (e.a.y + e.b.y) / 2 + dx / L3 * off, (e.a.z + e.b.z) / 2 + amp * 0.55);
+e.path.setAttribute('d', 'M' + A.x.toFixed(1) + ' ' + A.y.toFixed(1) + ' Q' + C.x.toFixed(1) + ' ' + C.y.toFixed(1) + ' ' + B.x.toFixed(1) + ' ' + B.y.toFixed(1));
+const dark = e.path.classList.contains('dim');
+e.path.setAttribute('opacity', (Math.min(depthK(e.a.z), depthK(e.b.z)) * (dark ? 0.28 : 0.92)).toFixed(2));
+const t = 0.60, u = 1 - t;
+const lx = u * u * A.x + 2 * u * t * C.x + t * t * B.x;
+const ly = u * u * A.y + 2 * u * t * C.y + t * t * B.y;
+e.label.setAttribute('x', lx.toFixed(1));
+e.label.setAttribute('y', (ly - 5).toFixed(1));
+});
+}
+function peopleOn(){ return !!peopleEl && peopleEl.classList.contains('on'); }
+function frame(now){
+motion = 0;
+if (document.hidden || !peopleOn()) return;
+const dt = Math.min(0.05, lastT ? (now - lastT) / 1000 : 0.016);
+lastT = now;
+yaw += dt * 0.12;
+yawOff += (yawOffT - yawOff) * Math.min(1, dt * 3.4);
+pitch += (pitchT - pitch) * Math.min(1, dt * 3.4);
+layout();
+motion = requestAnimationFrame(frame);
+}
+function startMotion(){
+if (reduce || motion) return;
+lastT = 0;
+motion = requestAnimationFrame(frame);
+}
+function stopMotion(){ if (motion){ cancelAnimationFrame(motion); motion = 0; } }
 let hot = null;
 function paint(){
 const focus = hot || S.pid;
-Object.entries(G.nodes).forEach(([id, g]) => {
+Object.entries(G.nodes).forEach(function(pair){
+const id = pair[0], g = pair[1];
 g.classList.toggle('sel', id === S.pid);
 g.classList.toggle('hot', id === hot);
-const linked = !focus || id === focus || G.edges.some(e => (e.a === focus && e.b === id) || (e.b === focus && e.a === id));
+const linked = !focus || id === focus || G.edges.some(function(e){ return (e.a === focus && e.b === id) || (e.b === focus && e.a === id); });
 g.classList.toggle('dim', !linked);
 });
-G.edges.forEach(e => {
+G.edges.forEach(function(e){
 const on = !!focus && (e.a === focus || e.b === focus);
 e.line.classList.toggle('lit', on); e.label.classList.toggle('lit', on);
 e.line.classList.toggle('dim', !!focus && !on);
 });
-listEl.querySelectorAll('.tl-i').forEach(b => {
+listEl.querySelectorAll('.tl-i').forEach(function(b){
 b.classList.toggle('sel', b.dataset.pid === S.pid);
 b.classList.toggle('hot', b.dataset.pid === hot);
 });
+layout();
 }
 function setHot(id){ if (hot === id) return; hot = id; paint(); }
+svg.addEventListener('pointermove', function(ev){
+const r = svg.getBoundingClientRect();
+if (!r.width) return;
+const nx = (ev.clientX - r.left) / r.width - 0.5;
+const ny = (ev.clientY - r.top) / r.height - 0.5;
+yawOffT = -nx * 0.55;
+pitchT = 0.17 + ny * 0.30;
+if (peopleOn()) startMotion();
+});
+svg.addEventListener('pointerleave', function(){ yawOffT = 0; pitchT = 0.17; });
+if (peopleEl && !reduce){
+new MutationObserver(function(){
+if (peopleOn()){ lastT = 0; startMotion(); } else stopMotion();
+}).observe(peopleEl, { attributes: true, attributeFilter: ['class'] });
+document.addEventListener('visibilitychange', function(){
+if (document.hidden) stopMotion(); else if (peopleOn()) startMotion();
+});
+}
 const nQuote = ARCH.reduce((n, p) => n + p.idx.length + 1, 0);
 readEl.innerHTML = '<span>人员<b>' + ARCH.length + '</b></span><span>关系<b>' + TERM_EDGES.length + '</b></span>' +
 '<span>原文引文<b>' + nQuote + '</b></span><span>证据<b>逐字 · 标页码</b></span>' +
