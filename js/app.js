@@ -8692,7 +8692,7 @@ return gl.getProgramParameter(p, gl.LINK_STATUS) ? p : null;
 qProg = mkProg('precision mediump float;void main(){gl_FragColor=vec4(0.0);}');
 tProg = mkProg('precision mediump float;varying vec2 vUv;uniform sampler2D uT;uniform sampler2D uB;uniform float uK;uniform vec2 uPx;' +
 'void main(){vec4 c=texture2D(uT,vUv);' +
-'vec3 bl=texture2D(uB,vUv).rgb;' +
+'vec3 bl=texture2D(uB,vUv).rgb;bl*=bl;' +
 'vec3 x=pow(min(c.rgb+bl*uK,vec3(1.0)),vec3(0.95));' +
 'vec2 q=vUv-0.5;float vg=1.0-0.20*dot(q,q)*2.2;' +
 'gl_FragColor=vec4(x*vg,c.a);}');
@@ -8912,7 +8912,7 @@ gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
 gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE);
 gl.useProgram(prog);
 gl.uniform2f(loc.R, W, H);
-gl.uniform1f(loc.H, T.hue * Math.PI / 180);
+gl.uniform1f(loc.H, (T.hue + now * 0.0022) * Math.PI / 180);
 gl.uniform1f(loc.G, T.glow / 50);
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 gl.bufferSubData(gl.ARRAY_BUFFER, 0, BUF.subarray(0, N * 7));
@@ -8934,7 +8934,7 @@ gl.useProgram(bProg);
 gl.activeTexture(gl.TEXTURE0);
 gl.bindTexture(gl.TEXTURE_2D, fbTex);
 gl.uniform1i(gl.getUniformLocation(bProg, 'uT'), 0);
-gl.uniform2f(gl.getUniformLocation(bProg, 'uP'), 0.9 / W, 0.9 / H);
+gl.uniform2f(gl.getUniformLocation(bProg, 'uP'), 2.4 / W, 2.4 / H);
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
 gl.enableVertexAttribArray(0);
 gl.vertexAttribPointer(0, 2, gl.FLOAT, false, 0, 0);
@@ -8953,7 +8953,7 @@ gl.bindTexture(gl.TEXTURE_2D, fbQTex);
 gl.uniform1i(gl.getUniformLocation(tProg, 'uB'), 1);
 gl.activeTexture(gl.TEXTURE0);
 }
-gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 0.12 : 0.0);
+gl.uniform1f(gl.getUniformLocation(tProg, 'uK'), fbQ ? 1.55 : 0.0);
 gl.uniform2f(gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
 gl.uniform2f(tProg && gl.getUniformLocation(tProg, 'uPx'), 1 / W, 1 / H);
 gl.bindBuffer(gl.ARRAY_BUFFER, quadBuf);
@@ -8965,7 +8965,7 @@ gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
 gl.clearColor(0, 0, 0, 0); gl.clear(gl.COLOR_BUFFER_BIT);
 gl.useProgram(prog);
 gl.uniform2f(loc.R, W, H);
-gl.uniform1f(loc.H, T.hue * Math.PI / 180);
+gl.uniform1f(loc.H, (T.hue + now * 0.0022) * Math.PI / 180);
 gl.uniform1f(loc.G, T.glow / 50);
 gl.bindBuffer(gl.ARRAY_BUFFER, vbo);
 gl.bufferSubData(gl.ARRAY_BUFFER, 0, BUF.subarray(0, N * 7));
