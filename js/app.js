@@ -8392,7 +8392,7 @@ const R = (62 + 52 * sin(pr * Math.PI * 1.3 + sA * TAU)) * breathe;
 const th = sA * TAU + pr * 2.7 + sin(t * 0.8 + sB * TAU) * 0.5 + (c - 0.5) * 0.06;
 const ph2 = Math.acos(2 * sB - 1) + cos(pr * 4.2 + t * 0.65 + sA * TAU) * 0.40;
 const warm = Math.max(0, 1 - pr * 1.25);
-const QC = iqCol(0.22 + pr * 0.5, warm > 0.5 ? 0 : 1);
+const QC = [110 + 145 * pr, 225 - 75 * pr, 255 - 45 * pr];
 put3D(i, R * sin(ph2) * cos(th), R * cos(ph2), R * sin(ph2) * sin(th), rx, ry,
 0.8 + fade * 1.1, QC[0], QC[1], QC[2],
 fade * (0.16 + 0.26 * (1 - c * 0.5)), 0.85);
@@ -8402,15 +8402,16 @@ const R = [120, 166, 210][k3] * breathe + (b - 0.5) * 4;
 const tilt = [0.48, 1.12, 1.68][k3], spd = [0.62, -0.44, 0.30][k3];
 const th = a * TAU + t * spd;
 const head = Math.pow(0.5 + 0.5 * sin(th * 2 - t * 2.1 + k3), 2);
+const RC3 = [[122, 228, 255], [172, 146, 255], [255, 138, 200]][k3];
 put3D(i, cos(th) * R, sin(th) * R * sin(tilt), sin(th) * R * cos(tilt), rx, ry,
-0.78 + head * 1.1, 146 + head * 92, 208 + head * 40, 255, 0.14 + head * 0.36, 0.02);
+0.78 + head * 1.1, RC3[0] + head * 34, RC3[1] + head * 26, RC3[2] + head * 22, 0.14 + head * 0.36, 0.02);
 } else {
 const cth = a * TAU + t * (0.22 + (i % 5) * 0.05) + sin(t * 0.6 + c * 6.28) * 0.18;
 const cph = Math.acos(2 * c - 1) + cos(t * 0.5 + a * TAU) * 0.20;
 const cd = (126 + 86 * Math.pow(b, 0.7) + 12 * sin(t * 1.1 + a * 9)) * breathe;
 const glow = 0.5 + 0.5 * sin(t * 1.3 + b * 10 + c * 6);
 put3D(i, cd * sin(cph) * cos(cth), cd * cos(cph), cd * sin(cph) * sin(cth), rx, ry,
-0.50 + glow * 0.62, 255, 204 + glow * 40, 150 + glow * 46, (0.045 + glow * 0.115) * (1 - b * 0.42), 0.55);
+0.50 + glow * 0.62, 255, 166 + glow * 46, 208 + glow * 34, (0.045 + glow * 0.115) * (1 - b * 0.42), 0.55);
 }
 }
 } },
