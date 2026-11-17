@@ -1964,6 +1964,7 @@ cfg.fluct = TUNE.fluct / 100;
 cfg.decay = Math.max(0.4, TUNE.decay / 100);
 }
 }
+$('#tune').dataset.open = 'true';
 $('#tuneTab').addEventListener('click', () => {
 const t = $('#tune');
 t.dataset.open = t.dataset.open === 'true' ? 'false' : 'true';
