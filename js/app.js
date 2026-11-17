@@ -8290,7 +8290,7 @@ const y2 = y3 * cx - z1 * sx, z2 = y3 * sx + z1 * cx;
 const persp = 540 / Math.max(180, 540 - z2);
 const dep = Math.max(0.32, Math.min(1.5, (z2 + 240) / 360));
 const halo = (i % 21) === 0, mid = (i % 6) === 0;
-const s2 = (halo ? 2.35 : (mid ? 1.18 : 0.60)) * sz;
+const s2 = (halo ? 2.35 : (mid ? 1.18 : 0.60)) * sz * PSC;
 const a2 = Math.min(1, (halo ? a * 0.085 : a * 0.92) * dep);
 put(i, 300 + x1 * persp, 300 + y2 * persp, s2 * persp, r, g, b, a2, tf);
 }
@@ -8745,7 +8745,7 @@ fbW = W; fbH = H;
 if (!ok) { fb = null; fbTex = null; qProg = tProg = null; }
 return ok;
 }
-let W = 0, H = 0, dpr = 1, cx = 0, cy = 0, u = 1, lastHx = 0, lastHy = 0, lastHsc = 1;
+let W = 0, H = 0, dpr = 1, cx = 0, cy = 0, u = 1, lastHx = 0, lastHy = 0, lastHsc = 1, PSC = 1;
 function layout() {
 const r = stage.getBoundingClientRect();
 dpr = Math.min(2.5, Math.max(1.5, devicePixelRatio || 1));
@@ -8755,6 +8755,7 @@ const c = center.getBoundingClientRect();
 const z = typeof zScale === 'number' ? zScale : 1;
 cx = (c.left - r.left + c.width / 2) * dpr; cy = (c.top - r.top + c.height / 2) * dpr;
 u = c.width / 600 * z * dpr;
+PSC = Math.max(1.45, u * 2.05);
 }
 stage.addEventListener('pointermove', e => {
 const r = stage.getBoundingClientRect();
