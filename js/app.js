@@ -3279,12 +3279,12 @@ nodes3.forEach(function(n){
 const p = byId(n.id); if (!p) return;
 const g = el('g', { class: 'tnode', 'data-pid': n.id, tabindex: '0', role: 'button',
 'aria-label': p.name + ' · ' + p.role + '，按回车调出档案' }, gNodes);
-el('circle', { cx: 0, cy: 0, r: n.r + 8, class: 'ring' }, g);
-el('circle', { cx: 0, cy: 0, r: n.r, class: 'halo' }, g);
-el('circle', { cx: 0, cy: 0, r: n.r * 0.7, class: 'core' }, g);
-const no = el('text', { x: 0, y: -n.r * 0.08, class: 'no', 'font-size': n.F * 0.62 }, g); no.textContent = p.no;
-const nm = el('text', { x: 0, y: n.r * 0.52, 'font-size': n.id === 'main' ? n.F * 1.25 : n.F }, g); nm.textContent = p.name;
-const rl = el('text', { x: 0, y: n.r + n.F + 4, class: 'rl', 'font-size': n.F * 0.72 }, g); rl.textContent = p.tag.split(' · ')[0];
+el('circle', { cx: 0, cy: 0, r: n.r * 0.62 + 6, class: 'ring' }, g);
+el('circle', { cx: 0, cy: 0, r: n.r * 0.62, class: 'halo' }, g);
+el('circle', { cx: 0, cy: 0, r: n.r * 0.44, class: 'core' }, g);
+const no = el('text', { x: 0, y: -n.r * 0.08, class: 'no', 'font-size': n.F * 0.5, opacity: '0' }, g); no.textContent = p.no;
+const nm = el('text', { x: 0, y: n.r * 0.24, 'font-size': n.F * 0.82 }, g); nm.textContent = p.name;
+const rl = el('text', { x: 0, y: n.r + n.F + 4, class: 'rl', 'font-size': n.F * 0.72, opacity: '0' }, g); rl.textContent = p.tag.split(' · ')[0];
 n.el = g;
 G.nodes[n.id] = g;
 });
