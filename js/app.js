@@ -3286,6 +3286,37 @@ const no = el('text', { x: 0, y: -n.r * 0.08, class: 'no', 'font-size': n.F * 0.
 const nm = el('text', { x: 0, y: n.r * 0.24, 'font-size': n.F * 0.82 }, g); nm.textContent = p.name;
 const rl = el('text', { x: 0, y: n.r + n.F + 4, class: 'rl', 'font-size': n.F * 0.72, opacity: '0' }, g); rl.textContent = p.tag.split(' · ')[0];
 n.el = g;
+n.ox = 0; n.oy = 0;
+(function drag(node, gEl){
+const base = gEl.setAttribute.bind(gEl);
+gEl.setAttribute = function(k, v){
+if (k === 'transform' && (node.ox || node.oy)) {
+v = String(v).replace(/translate\((-?[\d.]+),\s*(-?[\d.]+)\)/, function(m, x, y){
+return 'translate(' + ((+x) + node.ox).toFixed(2) + ',' + ((+y) + node.oy).toFixed(2) + ')';
+});
+}
+return base(k, v);
+};
+let dragging = false, px = 0, py = 0;
+gEl.style.cursor = 'grab';
+gEl.addEventListener('pointerdown', function(e){
+dragging = true; px = e.clientX; py = e.clientY;
+gEl.style.cursor = 'grabbing';
+try { gEl.setPointerCapture(e.pointerId); } catch (err) {}
+e.preventDefault(); e.stopPropagation();
+});
+gEl.addEventListener('pointermove', function(e){
+if (!dragging) return;
+node.ox += e.clientX - px; node.oy += e.clientY - py;
+px = e.clientX; py = e.clientY;
+e.stopPropagation();
+});
+const end = function(e){ if (!dragging) return; dragging = false; gEl.style.cursor = 'grab';
+try { gEl.releasePointerCapture(e.pointerId); } catch (err) {} };
+gEl.addEventListener('pointerup', end);
+gEl.addEventListener('pointercancel', end);
+gEl.addEventListener('dblclick', function(e){ node.ox = 0; node.oy = 0; e.stopPropagation(); });
+})(n, g);
 G.nodes[n.id] = g;
 });
 TERM_EDGES.forEach(function(e, ei){
