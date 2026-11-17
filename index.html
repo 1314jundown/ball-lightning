@@ -5247,6 +5247,9 @@ align-items:center;gap:12px;width:100%;
 .term .ov-dos:hover{border-left-color:rgba(255,208,138,.9)}
 .term .ov-dos:hover .ov-dos-go{color:#ffd08a}
 .term .ov-dos:focus-visible{outline:none;border-left-color:#fff}
+.term[data-phase="dossier"] .dos{max-height:calc(100vh - 196px);overflow-y:auto;overscroll-behavior:contain}
+.term[data-phase="dossier"] .dos::-webkit-scrollbar{width:6px}
+.term[data-phase="dossier"] .dos::-webkit-scrollbar-thumb{background:rgba(255,255,255,.18);border-radius:99px}
 </style>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%230a0e12'/%3E%3Cpath d='M18 4 L9 18h6l-1 10 9-14h-6z' fill='%23bfe4ff'/%3E%3C/svg%3E">
 </head>
