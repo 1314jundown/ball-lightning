@@ -1807,6 +1807,8 @@ HANDS.state = 'off'; HANDS.present = false; stopAll(); closeCam(); ui();
 }
 const CONCEPT_KEYS = Object.keys(nodes);
 let swipeCool = 0, swipeLock = 0, lastPx = 0, lastPxt = 0, lastPy = 0, lastPyt = 0;
+let swipeArmed = true;
+const swipeHist = [];
 function handTo600(px, py){ return { x: 300 + (0.5 - px) * 520, y: 300 + (py - 0.5) * 380 }; }
 function readHand(lm){
 let px = 0, py = 0;
@@ -1893,12 +1895,20 @@ HANDS.lm2 = null;
 HANDS.bridgeRaw = 0;
 if (swipeLock > 0) swipeLock -= dt;
 if (swipeCool > 0) swipeCool -= dt;
-const fast = Math.abs(vxRaw) > 1.75 && Math.abs(vxRaw) > Math.abs(vyRaw) * 2.6;
-if (fast && a.open > 0.50 && a.pinch < 0.25 && a.fist < 0.20 && swipeCool <= 0 && sec.classList.contains('on')) {
-swipe(vxRaw > 0 ? -1 : 1);
-swipeCool = 0.85;
-swipeLock = 0.45;
+const fastNow = Math.abs(vxRaw) > 0.85 && Math.abs(vxRaw) > Math.abs(vyRaw) * 1.6;
+swipeHist.push({ t: now, x: a.px, y: a.py });
+while (swipeHist.length && now - swipeHist[0].t > 0.22) swipeHist.shift();
+const h0 = swipeHist[0];
+const dxWin = h0 ? a.px - h0.x : 0;
+const dyWin = h0 ? a.py - h0.y : 1;
+const swing = Math.abs(dxWin) > 0.20 && Math.abs(dxWin) > Math.abs(dyWin) * 1.3;
+const handOk = a.open > 0.26 && a.pinch < 0.45 && a.fist < 0.35;
+if ((fastNow || swing) && handOk && swipeArmed && swipeCool <= 0 && sec.classList.contains('on')) {
+swipe((((fastNow && Math.abs(vxRaw) > 0.85) ? vxRaw : dxWin) > 0) ? -1 : 1);
+swipeCool = 0.5; swipeLock = 0.26;
+swipeArmed = false; swipeHist.length = 0;
 }
+if (!swipeArmed && swipeCool <= 0 && Math.abs(vxRaw) < 0.6) swipeArmed = true;
 if (swipeLock <= 0) { HANDS.tx = p.x; HANDS.ty = p.y; }
 HANDS.gesture = a.fist > 0.45 ? '熄灭' : a.pinch > 0.4 ? '收束' : Math.abs(a.swirl) > 0.5 ? '旋涡' : '牵引';
 }
