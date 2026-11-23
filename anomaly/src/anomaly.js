@@ -1837,7 +1837,7 @@
   const _tagV = new T.Vector3();
   let doorTagEl = null;
   let lookMode = 'real';   /* 默认正常建模：游客不手动切也能看到实体与坍缩效果 */
-  let realLight = null, realAmb = null, realBulb = null;
+  let realLight = null, realAmb = null, realBulb = null, realSky = null;
   function setLook(mode) {
     lookMode = mode === 'real' ? 'real' : 'wire';
     const real = lookMode === 'real';
@@ -1861,18 +1861,34 @@
       realLight.position.set(4.2, 6.0, -2.0);
       scene.add(realLight);
     }
+    /* 房间的贴图本身偏深，纯点光压不出形体：加一盏半球环境光把空间托起来 */
+    if (!realSky) {
+      realSky = new T.HemisphereLight(0xb9cdf0, 0x2a2620, 0);
+      scene.add(realSky);
+    }
     if (!realBulb) {
       realBulb = new T.PointLight(0xffd9a0, 0, 9, 2);
       realBulb.position.set(4.9, 2.55, -4.6);
       scene.add(realBulb);
     }
-    if (amb) amb.intensity = real ? 0.16 : 1.75;
+    if (amb) amb.intensity = real ? 7.50 : 1.75;
     if (lamp) lamp.intensity = real ? 1.2 : 3.0;
-    realAmb.intensity = real ? 0.26 : 0;
-    realLight.intensity = real ? 0.22 : 0;
-    realBulb.intensity = real ? 3.4 : 0;
-    if (renderer) renderer.toneMappingExposure = real ? 0.92 : 1.0;
-    scene.fog.density = real ? 0.045 : 0.16;
+    realAmb.intensity = real ? 5.00 : 0;
+    realLight.intensity = real ? 3.20 : 0;
+    realBulb.intensity = real ? 16.0 : 0;
+    if (realSky) realSky.intensity = real ? 5.50 : 0;
+    if (renderer) renderer.toneMappingExposure = real ? 2.20 : 1.0;
+    /* 窗光与室内两盏小灯才是真正照亮房间的光源，跟着建模模式一起抬 */
+    if (winLight) winLight.intensity = real ? 12.0 : 2.4;
+    scene.traverse(function (o) {
+      if (o.isPointLight && o.userData.realK === undefined && (o.intensity === 2 || o.intensity === 1.1)) {
+        o.userData.realK = o.intensity;
+      }
+      if (o.isPointLight && o.userData.realK !== undefined) {
+        o.intensity = o.userData.realK * (real ? 3.2 : 1);
+      }
+    });
+    scene.fog.density = real ? 0.030 : 0.16;
     document.body.classList.toggle('look-real', real);
     const b = document.getElementById('lookBtn');
     if (b) b.textContent = real ? '画风：真实贴图' : '画风：全息线框';
@@ -2554,7 +2570,7 @@
 
   /* ==== POST ==== 后期：亮部提取 + 三级模糊 + 暗角 + 颗粒 */
   const POST = (function () {
-    const PO = { on: true, threshold: 0.85, knee: 0.14, strength: 0.55, vignette: 0.58, grain: 0.016 };
+    const PO = { on: true, threshold: 0.85, knee: 0.14, strength: 0.55, vignette: 0.34, grain: 0.016 };
     window.__po = PO;
 
     const quadGeo = new T.PlaneGeometry(2, 2);
