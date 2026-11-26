@@ -1,0 +1,78 @@
+<!doctype html>
+<html><head><meta charset="utf-8"><title>wawa minimal</title>
+<style>html,body{margin:0;height:100%;background:#06070a;overflow:hidden}canvas{display:block}</style>
+</head><body>
+<script>
+window.__logs = [];
+['error','warn'].forEach(function (k) {
+  var o = console[k];
+  console[k] = function () {
+    var a = [].slice.call(arguments).map(String).join(' ');
+    window.__logs.push(k + ': ' + a);
+    o.apply(console, arguments);
+  };
+});
+</script>
+<script src="../vendor/three.bundle.js"></script>
+<script src="assets/wawa-vfx.js"></script>
+<script>
+const { VFXEmitter, VFXParticles, AppearanceMode } = WawaVFXVanilla;
+
+function makeSoft() {
+  const c = document.createElement('canvas'); c.width = c.height = 64;
+  const g = c.getContext('2d');
+  const r = g.createRadialGradient(32, 32, 0, 32, 32, 32);
+  r.addColorStop(0, 'rgba(255,255,255,1)');
+  r.addColorStop(0.45, 'rgba(255,255,255,0.55)');
+  r.addColorStop(1, 'rgba(255,255,255,0)');
+  g.fillStyle = r; g.fillRect(0, 0, 64, 64);
+  const t = new THREE.CanvasTexture(c);
+  t.colorSpace = THREE.SRGBColorSpace;
+  return t;
+}
+const SOFT = makeSoft();
+const scene = new THREE.Scene();
+const camera = new THREE.PerspectiveCamera(75, innerWidth/innerHeight, 0.1, 1000);
+const renderer = new THREE.WebGLRenderer();
+renderer.setSize(innerWidth, innerHeight);
+renderer.setClearColor(0x06070a, 1);
+document.body.appendChild(renderer.domElement);
+
+const particles = new VFXParticles('fireParticles', {
+  nbParticles: 10000,
+  gravity: [0, -2, 0],
+  renderMode: 'billboard',
+  intensity: 2,
+  appearance: AppearanceMode.Circular,
+  easeFunction: 'easeOutCubic',
+  fadeAlpha: [0.1, 0.9],
+  fadeSize: [0.2, 0.8],
+  blendingMode: THREE.AdditiveBlending,
+}, undefined, SOFT);
+scene.add(particles.getMesh());
+
+const emitter = new VFXEmitter('fireParticles', {
+  loop: true, duration: 2, nbParticles: 50, spawnMode: 'time', delay: 0,
+  particlesLifetime: [0.5, 2.0],
+  startPositionMin: [-0.2, 0, -0.2], startPositionMax: [0.2, 0.5, 0.2],
+  startRotationMin: [0,0,0], startRotationMax: [Math.PI*2, 0, 0],
+  rotationSpeedMin: [-1,0,-1], rotationSpeedMax: [1,0,1],
+  directionMin: [-0.5, 1, -0.5], directionMax: [0.5, 2, 0.5],
+  size: [0.02, 0.1], speed: [2, 5],
+  colorStart: ['#ff6b35', '#f7931e'], colorEnd: ['#ff0000', '#8b0000'],
+  useLocalDirection: false,
+});
+scene.add(emitter);
+camera.position.z = 3;
+
+const clock = new THREE.Clock();
+function animate(){
+  requestAnimationFrame(animate);
+  const dt = clock.getDelta(), et = clock.getElapsedTime();
+  emitter.update(et, dt);
+  particles.update(et);
+  renderer.render(scene, camera);
+}
+animate();
+</script>
+</body></html>
