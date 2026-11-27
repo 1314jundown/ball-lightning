@@ -6777,7 +6777,10 @@ nan: !isFinite(X[i]) || !isFinite(Y[i]) || !isFinite(BUF[o]) };
 const curBtn = document.querySelector('#cgList [aria-current="true"]');
 setScene(curBtn ? curBtn.dataset.node : 'ball');
 })();
-readHash();
+if (/^#\d$/.test(location.hash)) {
+try { history.replaceState(null, '', '#0'); } catch (_) { location.hash = '#0'; }
+}
+hashBooted = true;
 addEventListener('hashchange', () => { if (location.hash) readHash(); });
 if (window.MissionControl) {
 window.MissionControl.subscribe(function (mcCfg, changed) {
